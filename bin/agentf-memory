@@ -1,0 +1,221 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+require "optparse"
+
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+require "agentf"
+
+module Agentf
+  # CLI runner for MemoryReviewer tool
+  class MemoryCLI
+    def initialize
+      @reviewer = Tools::MemoryReviewer.new
+    end
+
+    def run(args)
+      command = args.shift || "help"
+
+      case command
+      when "recent", "list"
+        list_memories(args)
+      when "pitfalls"
+        list_pitfalls(args)
+      when "lessons"
+        list_lessons(args)
+      when "successes"
+        list_successes(args)
+      when "tags"
+        list_tags
+      when "search"
+        search_memories(args)
+      when "summary", "stats"
+        show_summary
+      when "by-tag"
+        by_tag(args)
+      when "by-agent"
+        by_agent(args)
+      when "by-type"
+        by_type(args)
+      when "help", "--help", "-h"
+        show_help
+      else
+        puts "Unknown command: #{command}"
+        puts
+        show_help
+        exit 1
+      end
+    end
+
+    private
+
+    def list_memories(args)
+      limit = extract_limit(args)
+      result = @reviewer.get_recent_memories(limit: limit)
+      output(result)
+    end
+
+    def list_pitfalls(args)
+      limit = extract_limit(args)
+      result = @reviewer.get_pitfalls(limit: limit)
+      output(result)
+    end
+
+    def list_lessons(args)
+      limit = extract_limit(args)
+      result = @reviewer.get_lessons(limit: limit)
+      output(result)
+    end
+
+    def list_successes(args)
+      limit = extract_limit(args)
+      result = @reviewer.get_successes(limit: limit)
+      output(result)
+    end
+
+    def list_tags
+      result = @reviewer.get_all_tags
+      if result["tags"].empty?
+        puts "No tags found."
+      else
+        puts "Tags (#{result["count"]}):"
+        result["tags"].each { |tag| puts "  - #{tag}" }
+      end
+    end
+
+    def search_memories(args)
+      query = args.join(" ")
+      if query.empty?
+        puts "Error: search requires a query string"
+        exit 1
+      end
+      limit = extract_limit(args)
+      result = @reviewer.search(query, limit: limit)
+      output(result)
+    end
+
+    def show_summary
+      result = @reviewer.get_summary
+      puts "Memory Summary for project: #{result["project"]}"
+      puts "-" * 40
+      puts "Total memories: #{result["total_memories"]}"
+      puts ""
+      puts "By type:"
+      result["by_type"].each { |type, count| puts "  #{type}: #{count}" }
+      puts ""
+      puts "By agent:"
+      result["by_agent"].each { |agent, count| puts "  #{agent}: #{count}" }
+      puts ""
+      puts "Unique tags: #{result["unique_tags"]}"
+    end
+
+    def by_tag(args)
+      tag = args.shift
+      if tag.nil? || tag.empty?
+        puts "Error: by-tag requires a tag name"
+        exit 1
+      end
+      limit = extract_limit(args)
+      result = @reviewer.get_by_tag(tag, limit: limit)
+      output(result)
+    end
+
+    def by_agent(args)
+      agent = args.shift
+      if agent.nil? || agent.empty?
+        puts "Error: by-agent requires an agent name"
+        exit 1
+      end
+      limit = extract_limit(args)
+      result = @reviewer.get_by_agent(agent, limit: limit)
+      output(result)
+    end
+
+    def by_type(args)
+      type = args.shift
+      unless %w[pitfall lesson success].include?(type)
+        puts "Error: type must be one of: pitfall, lesson, success"
+        exit 1
+      end
+      limit = extract_limit(args)
+      result = @reviewer.get_by_type(type, limit: limit)
+      output(result)
+    end
+
+    def extract_limit(args)
+      idx = args.index("-n")
+      return 10 unless idx && args[idx + 1]
+
+      args[idx + 1].to_i
+    end
+
+    def output(result)
+      if result["error"]
+        puts "Error: #{result["error"]}"
+        exit 1
+      end
+
+      if result["count"] == 0
+        puts "No memories found."
+        return
+      end
+
+      memories = result["memories"] || result.values.first
+
+      memories.each do |mem|
+        puts format_memory(mem)
+        puts "-" * 40
+      end
+    end
+
+    def format_memory(mem)
+      <<~OUTPUT
+        [#{mem["type"]&.upcase}] #{mem["title"]}
+        #{mem["created_at"]} by #{mem["agent"]}
+        #{mem["description"]}
+        #{format_code(mem["code_snippet"]) unless mem["code_snippet"].to_s.empty?}
+        Tags: #{mem["tags"]&.join(", ") || "none"}
+      OUTPUT
+    end
+
+    def format_code(snippet)
+      return "" if snippet.to_s.empty?
+
+      "\n```\n#{snippet.strip}\n```"
+    end
+
+    def show_help
+      <<~HELP
+        Usage: agentf memory <command> [options]
+
+        Commands:
+          recent, list              List recent memories (default: 10)
+          pitfalls                  List pitfalls (things that went wrong)
+          lessons                   List lessons learned
+          successes                 List successes
+          tags                      List all unique tags
+          search <query>            Search memories by keyword
+          summary, stats            Show summary statistics
+          by-tag <tag>              Get memories with specific tag
+          by-agent <agent>          Get memories from specific agent
+          by-type <type>            Get memories by type (pitfall|lesson|success)
+
+        Options:
+          -n <count>               Limit number of results (default: 10)
+
+        Examples:
+          agentf memory recent -n 5
+          agentf memory pitfalls
+          agentf memory search "react"
+          agentf memory by-tag "performance"
+          agentf memory summary
+      HELP
+    end
+  end
+end
+
+# Run if executed directly
+if __FILE__ == $0
+  Agentf::MemoryCLI.new.run(ARGV)
+end

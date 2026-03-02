@@ -1,0 +1,53 @@
+# frozen_string_literal: true
+
+require "dotenv/load"
+require "json"
+require "time"
+require "securerandom"
+require "pathname"
+
+module Agentf
+  class Error < StandardError; end
+
+  # Global configuration
+  class Config
+    attr_reader :redis_url
+    attr_accessor :redis_password, :project_name, :base_path
+
+    def initialize
+      @redis_url = normalize_redis_url(ENV.fetch("REDIS_URL", "redis://localhost:6379"))
+      @redis_password = ENV["REDIS_PASSWORD"]
+      @project_name = ENV.fetch("AGENTF_PROJECT_NAME", "default")
+      @base_path = Dir.pwd
+    end
+
+    def redis_url=(value)
+      @redis_url = normalize_redis_url(value)
+    end
+
+    private
+
+    def normalize_redis_url(value)
+      url = value.to_s.strip
+      return "redis://localhost:6379" if url.empty?
+
+      return url if url.match?(/\A[a-z][a-z0-9+\-.]*:\/\//i)
+
+      "redis://#{url}"
+    end
+  end
+
+  def self.config
+    @config ||= Config.new
+  end
+
+  def self.configure
+    yield(config) if block_given?
+  end
+end
+
+# Load submodules
+require_relative "agentf/memory"
+require_relative "agentf/tools"
+require_relative "agentf/orchestrator"
+require_relative "agentf/agents"

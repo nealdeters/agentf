@@ -1,0 +1,29 @@
+# Dependencies
+vendor/bundle
+.bundle/
+
+# Build artifacts
+*.gem
+pkg/
+
+# Testing
+coverage/
+spec/examples.txt
+.rspec
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local env
+.env
+.env.local
+*.log
+
+# Redis
+dump.rdb
