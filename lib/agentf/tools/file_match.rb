@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Agentf
-  module Tools
+  module Commands
     # Data class for file matches
     class FileMatch
       attr_reader :path, :line_number, :content, :match_type

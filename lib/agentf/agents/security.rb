@@ -1,21 +1,41 @@
 # frozen_string_literal: true
 
 require_relative "base"
-require_relative "../tools/security_scanner"
+require_relative "../commands"
 
 module Agentf
   module Agents
     # Security Agent - Performs lightweight security assessments during workflows
     class Security < Base
-      def initialize(memory, tools: nil)
+      DESCRIPTION = "Security scanning for secret leaks and prompt injection."
+      COMMANDS = %w[scan best_practices].freeze
+      MEMORY_CONCEPTS = {
+        "reads" => [],
+        "writes" => ["store_success", "store_pitfall"],
+        "policy" => "Record findings while redacting sensitive values."
+      }.freeze
+
+      def self.description
+        DESCRIPTION
+      end
+
+      def self.commands
+        COMMANDS
+      end
+
+      def self.memory_concepts
+        MEMORY_CONCEPTS
+      end
+
+      def initialize(memory, commands: nil)
         super(memory)
-        @tools = tools || Agentf::Tools::SecurityScanner.new
+        @commands = commands || Agentf::Commands::SecurityScanner.new
       end
 
       def assess(task:, context: {})
         log "Running security assessment"
 
-        findings = @tools.scan(task: task, context: context)
+        findings = @commands.scan(task: task, context: context)
         summary = summarize_findings(findings)
 
         if findings["issues"].empty?
@@ -36,7 +56,7 @@ module Agentf
           )
         end
 
-        findings.merge("best_practices" => @tools.best_practices)
+        findings.merge("best_practices" => @commands.best_practices)
       end
 
       private

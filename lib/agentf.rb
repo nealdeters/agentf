@@ -12,11 +12,10 @@ module Agentf
   # Global configuration
   class Config
     attr_reader :redis_url
-    attr_accessor :redis_password, :project_name, :base_path
+    attr_accessor :project_name, :base_path
 
     def initialize
       @redis_url = normalize_redis_url(ENV.fetch("REDIS_URL", "redis://localhost:6379"))
-      @redis_password = ENV["REDIS_PASSWORD"]
       @project_name = ENV.fetch("AGENTF_PROJECT_NAME", "default")
       @base_path = Dir.pwd
     end
@@ -48,6 +47,8 @@ end
 
 # Load submodules
 require_relative "agentf/memory"
-require_relative "agentf/tools"
-require_relative "agentf/orchestrator"
+require_relative "agentf/commands"
+require_relative "agentf/service/providers"
+require_relative "agentf/workflow_engine"
+require_relative "agentf/installer"
 require_relative "agentf/agents"

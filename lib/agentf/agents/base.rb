@@ -6,9 +6,33 @@ module Agentf
     class Base
       attr_reader :memory, :name
 
+      def self.typed_name
+        name.split("::").last.upcase
+      end
+
+      def self.description
+        "Agent for #{typed_name.downcase}"
+      end
+
+      def self.commands
+        []
+      end
+
+      def self.memory_concepts
+        {
+          "reads" => ["RedisMemory#get_recent_memories", "RedisMemory#get_pitfalls"],
+          "writes" => ["RedisMemory#store_lesson", "RedisMemory#store_success", "RedisMemory#store_pitfall"],
+          "policy" => "Memory is runtime state in Redis and should not be embedded as raw data in manifest markdown."
+        }
+      end
+
+      def self.prompt
+        "You are the #{typed_name} agent."
+      end
+
       def initialize(memory)
         @memory = memory
-        @name = self.class.name.split("::").last.upcase
+        @name = self.class.typed_name
       end
 
       def log(message)

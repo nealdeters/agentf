@@ -5,8 +5,22 @@ require "json"
 require "pathname"
 
 module Agentf
-  module Tools
+  module Commands
     class Tester
+      NAME = "tester"
+
+      def self.manifest
+        {
+          "name" => NAME,
+          "description" => "Generate and run tests for project files.",
+          "commands" => [
+            { "name" => "detect_framework", "type" => "function" },
+            { "name" => "generate_unit_tests", "type" => "function" },
+            { "name" => "run_tests", "type" => "function" }
+          ]
+        }
+      end
+
       PYTEST_TEMPLATE = <<~RUBY
         import pytest
         from %<module>s import %<import_name>s

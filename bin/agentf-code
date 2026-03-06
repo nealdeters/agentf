@@ -1,0 +1,144 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+require "agentf"
+
+module Agentf
+  class CodeCLI
+    def initialize
+      @explorer = Commands::Explorer.new
+      @json_output = false
+    end
+
+    def run(args)
+      @json_output = args.delete("--json")
+      command = args.shift || "help"
+
+      case command
+      when "glob"
+        run_glob(args)
+      when "grep"
+        run_grep(args)
+      when "tree"
+        run_tree(args)
+      when "related"
+        run_related(args)
+      when "help", "--help", "-h"
+        show_help
+      else
+        emit_error("Unknown command: #{command}")
+      end
+    end
+
+    private
+
+    def run_glob(args)
+      pattern = args.shift
+      return emit_error("glob requires a pattern") if pattern.to_s.empty?
+
+      file_types = parse_list_option(args, "--types=")
+      file_types = nil if file_types.empty?
+
+      results = @explorer.glob(pattern, file_types: file_types)
+      emit_success("glob", { "pattern" => pattern, "matches" => results, "count" => results.length })
+    end
+
+    def run_grep(args)
+      pattern = args.shift
+      return emit_error("grep requires a pattern") if pattern.to_s.empty?
+
+      file_pattern = parse_single_option(args, "--file-pattern=")
+      context_lines = parse_integer_option(args, "--context=", default: 2)
+
+      matches = @explorer.grep(pattern, file_pattern: file_pattern, context_lines: context_lines)
+      serialized = matches.map { |match| match.respond_to?(:to_h) ? match.to_h : match }
+      emit_success("grep", { "pattern" => pattern, "matches" => serialized, "count" => serialized.length })
+    end
+
+    def run_tree(args)
+      max_depth = parse_integer_option(args, "--depth=", default: 3)
+      tree = @explorer.get_file_tree(max_depth: max_depth)
+      emit_success("tree", { "max_depth" => max_depth, "tree" => tree })
+    end
+
+    def run_related(args)
+      target_file = args.shift
+      return emit_error("related requires a target file") if target_file.to_s.empty?
+
+      related = @explorer.find_related_files(target_file)
+      emit_success("related", { "target_file" => target_file, "related" => related })
+    end
+
+    def parse_list_option(args, prefix)
+      raw = parse_single_option(args, prefix)
+      return [] if raw.to_s.empty?
+
+      raw.split(",").map(&:strip).reject(&:empty?)
+    end
+
+    def parse_integer_option(args, prefix, default: 0)
+      raw = parse_single_option(args, prefix)
+      return default if raw.to_s.empty?
+
+      Integer(raw)
+    rescue ArgumentError
+      default
+    end
+
+    def parse_single_option(args, prefix)
+      option = args.find { |arg| arg.start_with?(prefix) }
+      return nil unless option
+
+      option.delete_prefix(prefix)
+    end
+
+    def emit_success(command, payload)
+      if @json_output
+        puts JSON.generate(payload.merge("command" => command))
+      else
+        puts "#{command} -> #{payload["count"] || 1} results"
+      end
+    end
+
+    def emit_error(message)
+      if @json_output
+        puts JSON.generate({ "error" => message })
+      else
+        puts "Error: #{message}"
+      end
+      exit 1
+    end
+
+    def show_help
+      puts <<~HELP
+        Usage: agentf-code <command> [options]
+
+        Commands:
+          glob <pattern>                 Glob files
+          grep <pattern>                 Search file contents
+          tree                           Print directory tree data
+          related <file>                 Find related/imported files
+
+        Options:
+          --json                         Output JSON
+          --types=rb,py                  Filter glob file types
+          --file-pattern=*.rb            Grep include pattern
+          --context=2                    Grep context lines
+          --depth=3                      Tree max depth
+
+        Examples:
+          ruby bin/agentf-code glob "lib/**/*.rb"
+          ruby bin/agentf-code grep "WorkflowEngine" --file-pattern=*.rb --json
+          ruby bin/agentf-code tree --depth=2 --json
+          ruby bin/agentf-code related lib/agentf/workflow_engine.rb --json
+      HELP
+    end
+  end
+end
+
+if __FILE__ == $PROGRAM_NAME
+  Agentf::CodeCLI.new.run(ARGV)
+end

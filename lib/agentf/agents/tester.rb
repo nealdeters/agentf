@@ -1,21 +1,41 @@
 # frozen_string_literal: true
 
 require_relative "base"
-require_relative "../tools/tester"
+require_relative "../commands"
 
 module Agentf
   module Agents
     # Tester Agent - Test generation and execution
     class Tester < Base
-      def initialize(memory, tools: nil)
+      DESCRIPTION = "Automated test generation and execution."
+      COMMANDS = %w[detect_framework generate_unit_tests run_tests].freeze
+      MEMORY_CONCEPTS = {
+        "reads" => [],
+        "writes" => ["store_success"],
+        "policy" => "Persist test generation outcomes for future reuse."
+      }.freeze
+
+      def self.description
+        DESCRIPTION
+      end
+
+      def self.commands
+        COMMANDS
+      end
+
+      def self.memory_concepts
+        MEMORY_CONCEPTS
+      end
+
+      def initialize(memory, commands: nil)
         super(memory)
-        @tools = tools || Agentf::Tools::Tester.new
+        @commands = commands || Agentf::Commands::Tester.new
       end
 
       def generate_tests(code_file, test_type: "unit")
         log "Generating #{test_type} tests for: #{code_file}"
 
-        template = @tools.generate_unit_tests(code_file)
+        template = @commands.generate_unit_tests(code_file)
 
         memory.store_success(
           title: "Generated #{test_type} tests for #{code_file}",
@@ -38,7 +58,7 @@ module Agentf
       def run_tests(test_file)
         log "Running tests: #{test_file}"
 
-        result = @tools.run_tests(test_file: test_file)
+        result = @commands.run_tests(test_file: test_file)
 
         log "Tests passed: #{result['passed']}"
 

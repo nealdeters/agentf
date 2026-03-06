@@ -6,6 +6,26 @@ module Agentf
   module Agents
     # Documenter Agent - Sync Redis memory with local Markdown docs
     class Documenter < Base
+      DESCRIPTION = "Syncs Redis memory with local Markdown summaries."
+      COMMANDS = %w[read_file write_file memory].freeze
+      MEMORY_CONCEPTS = {
+        "reads" => ["get_recent_memories"],
+        "writes" => [],
+        "policy" => "Summarize memory trends into docs without storing raw secrets."
+      }.freeze
+
+      def self.description
+        DESCRIPTION
+      end
+
+      def self.commands
+        COMMANDS
+      end
+
+      def self.memory_concepts
+        MEMORY_CONCEPTS
+      end
+
       def sync_docs(project_name)
         log "Syncing documentation"
 

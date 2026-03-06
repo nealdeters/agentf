@@ -140,8 +140,8 @@ end
 
 RSpec.describe Agentf::Agents::Explorer do
   let(:memory) { double("memory", store_episode: nil) }
-  let(:tools) { Agentf::Tools::Explorer.new(base_path: File.expand_path("../fixtures", __dir__)) }
-  subject(:explorer_agent) { described_class.new(memory, tools: tools) }
+  let(:commands) { Agentf::Commands::Explorer.new(base_path: File.expand_path("../fixtures", __dir__)) }
+  subject(:explorer_agent) { described_class.new(memory, commands: commands) }
 
   describe "#explore" do
     it "explores and finds files" do
@@ -161,8 +161,8 @@ end
 
 RSpec.describe Agentf::Agents::Tester do
   let(:memory) { double("memory", store_success: nil) }
-  let(:tools) { Agentf::Tools::Tester.new(base_path: File.expand_path("fixtures", __dir__)) }
-  subject(:tester_agent) { described_class.new(memory, tools: tools) }
+  let(:commands) { Agentf::Commands::Tester.new(base_path: File.expand_path("fixtures", __dir__)) }
+  subject(:tester_agent) { described_class.new(memory, commands: commands) }
 
   describe "#generate_tests" do
     it "generates tests for source file" do
@@ -190,8 +190,8 @@ end
 
 RSpec.describe Agentf::Agents::Debugger do
   let(:memory) { double("memory", store_episode: nil) }
-  let(:tools) { Agentf::Tools::Debugger.new }
-  subject(:debugger_agent) { described_class.new(memory, tools: tools) }
+  let(:commands) { Agentf::Commands::Debugger.new }
+  subject(:debugger_agent) { described_class.new(memory, commands: commands) }
 
   describe "#diagnose" do
     it "diagnoses error and returns analysis" do
@@ -213,8 +213,8 @@ end
 
 RSpec.describe Agentf::Agents::Designer do
   let(:memory) { double("memory", store_success: nil) }
-  let(:tools) { Agentf::Tools::Designer.new }
-  subject(:designer_agent) { described_class.new(memory, tools: tools) }
+  let(:commands) { Agentf::Commands::Designer.new }
+  subject(:designer_agent) { described_class.new(memory, commands: commands) }
 
   describe "#implement_design" do
     it "implements design from spec" do

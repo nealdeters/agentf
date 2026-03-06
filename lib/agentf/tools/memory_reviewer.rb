@@ -4,9 +4,30 @@ require "json"
 require "time"
 
 module Agentf
-  module Tools
+  module Commands
     # Tool for reviewing Redis-stored memories and learnings
     class MemoryReviewer
+      NAME = "memory"
+
+      def self.manifest
+        {
+          "name" => NAME,
+          "description" => "Review and query Redis-stored memories, pitfalls, and learnings.",
+          "commands" => [
+            { "name" => "get_recent_memories", "type" => "function" },
+            { "name" => "get_pitfalls", "type" => "function" },
+            { "name" => "get_lessons", "type" => "function" },
+            { "name" => "get_successes", "type" => "function" },
+            { "name" => "get_all_tags", "type" => "function" },
+            { "name" => "get_by_tag", "type" => "function" },
+            { "name" => "get_by_type", "type" => "function" },
+            { "name" => "get_by_agent", "type" => "function" },
+            { "name" => "search", "type" => "function" },
+            { "name" => "get_summary", "type" => "function" }
+          ]
+        }
+      end
+
       def initialize(project: nil)
         @project = project || Agentf.config.project_name
         @memory = Agentf::Memory::RedisMemory.new(project: @project)
@@ -42,6 +63,20 @@ module Agentf
         memories = @memory.get_recent_memories(limit: limit)
         successes = memories.select { |m| m["type"] == "success" }
         format_memories(successes)
+      rescue => e
+        { "error" => e.message }
+      end
+
+      def get_business_intents(limit: 10)
+        intents = @memory.get_intents(kind: "business", limit: limit)
+        format_memories(intents)
+      rescue => e
+        { "error" => e.message }
+      end
+
+      def get_feature_intents(limit: 10)
+        intents = @memory.get_intents(kind: "feature", limit: limit)
+        format_memories(intents)
       rescue => e
         { "error" => e.message }
       end

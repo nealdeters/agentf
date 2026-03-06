@@ -1,9 +1,22 @@
 # frozen_string_literal: true
 
 module Agentf
-  module Tools
+  module Commands
     # Performs lightweight security scanning for workflows
     class SecurityScanner
+      NAME = "security"
+
+      def self.manifest
+        {
+          "name" => NAME,
+          "description" => "Scan for secrets, detect prompt injection, and provide recommendations.",
+          "commands" => [
+            { "name" => "scan", "type" => "function" },
+            { "name" => "best_practices", "type" => "function" }
+          ]
+        }
+      end
+
       DEFAULT_PATTERNS = {
         "AWS Access Key" => /AKIA[0-9A-Z]{16}/,
         "Generic API Key" => /(api|secret|token)_?(key|token)?\s*[:=]\s*[A-Za-z0-9_-]{16,}/i,

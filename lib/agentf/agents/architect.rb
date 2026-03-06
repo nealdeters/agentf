@@ -6,6 +6,26 @@ module Agentf
   module Agents
     # Architect Agent - Strategy, task decomposition
     class Architect < Base
+      DESCRIPTION = "Strategy, task decomposition, and memory retrieval."
+      COMMANDS = %w[glob read_file memory].freeze
+      MEMORY_CONCEPTS = {
+        "reads" => ["get_recent_memories", "get_pitfalls"],
+        "writes" => [],
+        "policy" => "Retrieve relevant memories before planning; do not duplicate runtime memory into static markdown."
+      }.freeze
+
+      def self.description
+        DESCRIPTION
+      end
+
+      def self.commands
+        COMMANDS
+      end
+
+      def self.memory_concepts
+        MEMORY_CONCEPTS
+      end
+
       def plan_task(task)
         log "Planning: #{task}"
 

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Agentf::Tools::Debugger do
+RSpec.describe Agentf::Commands::Debugger do
   let(:base_path) { File.expand_path("../../fixtures", __dir__) }
 
   subject(:debugger) { described_class.new(base_path: base_path) }

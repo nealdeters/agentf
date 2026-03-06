@@ -1,0 +1,51 @@
+flowchart TD
+  U[Developer / CI] --> ICLI[bin/install.rb]
+  ICLI --> INS[Agentf::Installer]
+
+  subgraph Source[Class Metadata Source]
+    A[Agent classes
+Agentf::Agents::*]
+    C[Command classes
+Agentf::Commands::*]
+  end
+
+  INS --> A
+  INS --> C
+
+  A --> AMD[Generated Agent Markdown
+.opencode/agents/* OR .github/agents/*]
+  C --> CMD[Generated Command Markdown
+.opencode/commands/* OR .github/commands/*]
+
+  AMD -.includes memory policy.-> MEMMETA[memory_concepts
+reads/writes/policy]
+  CMD -.lists callable commands.-> CMETA[manifest commands list]
+
+  subgraph Runtime[Execution Runtime]
+    APP[App / User Task]
+    WF[Agentf::WorkflowEngine]
+    P[Provider Adapter
+OpenCode / Copilot]
+    AG[Agents]
+    COM[Commands]
+  end
+
+  APP --> WF
+  WF --> P
+  P --> AG
+  P --> COM
+
+  WF -->|get_relevant_context| REDIS[(RedisMemory)]
+  WF -->|store_feature_intent| REDIS
+  AG -->|store_success/pitfall/lesson| REDIS
+
+  subgraph MemoryCLI[Memory CLI]
+    MCLI[bin/agentf-memory]
+    MR[Commands::MemoryReviewer]
+  end
+
+  MCLI --> MR
+  MR -->|query/search/summaries| REDIS
+  MCLI -->|add-business-intent / add-feature-intent| REDIS
+
+  REDIS -.optional doc sync by agent behavior.-> AMD

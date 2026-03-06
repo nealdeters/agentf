@@ -4,8 +4,23 @@ require "open3"
 require "pathname"
 
 module Agentf
-  module Tools
+  module Commands
     class Explorer
+      NAME = "explorer"
+
+      def self.manifest
+        {
+          "name" => NAME,
+          "description" => "Find files, search code, and explore project structure.",
+          "commands" => [
+            { "name" => "glob", "type" => "function" },
+            { "name" => "grep", "type" => "function" },
+            { "name" => "get_file_tree", "type" => "function" },
+            { "name" => "find_related_files", "type" => "function" }
+          ]
+        }
+      end
+
       def initialize(base_path: nil)
         @base_path = base_path || Agentf.config.base_path
       end

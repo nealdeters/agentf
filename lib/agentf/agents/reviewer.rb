@@ -6,6 +6,26 @@ module Agentf
   module Agents
     # Reviewer Agent - Quality assurance
     class Reviewer < Base
+      DESCRIPTION = "Quality assurance and regression checking against memory."
+      COMMANDS = %w[read_file memory].freeze
+      MEMORY_CONCEPTS = {
+        "reads" => ["get_pitfalls", "get_recent_memories"],
+        "writes" => [],
+        "policy" => "Validate outputs against known pitfalls before approval."
+      }.freeze
+
+      def self.description
+        DESCRIPTION
+      end
+
+      def self.commands
+        COMMANDS
+      end
+
+      def self.memory_concepts
+        MEMORY_CONCEPTS
+      end
+
       def review(subtask_result)
         log "Reviewing subtask #{subtask_result['subtask_id']}"
 

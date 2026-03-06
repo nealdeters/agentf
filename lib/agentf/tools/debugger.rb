@@ -3,8 +3,22 @@
 require "pathname"
 
 module Agentf
-  module Tools
+  module Commands
     class Debugger
+      NAME = "debugger"
+
+      def self.manifest
+        {
+          "name" => NAME,
+          "description" => "Parse errors, analyze logs, and suggest fixes for bugs.",
+          "commands" => [
+            { "name" => "parse_error", "type" => "function" },
+            { "name" => "analyze_logs", "type" => "function" },
+            { "name" => "suggest_fix", "type" => "function" }
+          ]
+        }
+      end
+
       ERROR_PATTERNS = {
         "ImportError" => {
           "possible_causes" => [

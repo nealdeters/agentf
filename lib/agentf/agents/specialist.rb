@@ -6,6 +6,26 @@ module Agentf
   module Agents
     # Specialist Agent - Code execution
     class Specialist < Base
+      DESCRIPTION = "Code execution and lesson-learning persistence."
+      COMMANDS = %w[read_file write_file run_command].freeze
+      MEMORY_CONCEPTS = {
+        "reads" => [],
+        "writes" => ["store_success", "store_pitfall"],
+        "policy" => "Persist execution outcomes as lessons for downstream agents."
+      }.freeze
+
+      def self.description
+        DESCRIPTION
+      end
+
+      def self.commands
+        COMMANDS
+      end
+
+      def self.memory_concepts
+        MEMORY_CONCEPTS
+      end
+
       def execute(subtask)
         log "Executing: #{subtask['description']}"
 

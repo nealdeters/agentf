@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Agentf::Tools::SecurityScanner do
+RSpec.describe Agentf::Commands::SecurityScanner do
   subject(:scanner) { described_class.new }
 
   describe "#scan" do

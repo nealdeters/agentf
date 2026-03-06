@@ -12,9 +12,8 @@ module Agentf
     class RedisMemory
       attr_reader :project
 
-      def initialize(redis_url: nil, redis_password: nil, project: nil)
+      def initialize(redis_url: nil, project: nil)
         @redis_url = redis_url || Agentf.config.redis_url
-        @redis_password = redis_password.nil? ? Agentf.config.redis_password : redis_password
         @project = project || Agentf.config.project_name
         @client = Redis.new(client_options)
         @json_supported = detect_json_support
@@ -43,7 +42,8 @@ module Agentf
         task_id
       end
 
-      def store_episode(type:, title:, description:, context: "", code_snippet: "", tags: [], agent: "SPECIALIST", related_task_id: nil)
+      def store_episode(type:, title:, description:, context: "", code_snippet: "", tags: [], agent: "SPECIALIST", related_task_id: nil,
+                        metadata: {})
         episode_id = "episode_#{SecureRandom.hex(4)}"
 
         data = {
@@ -57,7 +57,8 @@ module Agentf
           "tags" => tags,
           "created_at" => Time.now.to_i,
           "agent" => agent,
-          "related_task_id" => related_task_id || ""
+          "related_task_id" => related_task_id || "",
+          "metadata" => metadata
         }
 
         key = "episodic:#{episode_id}"
@@ -117,34 +118,115 @@ module Agentf
         )
       end
 
+      def store_business_intent(title:, description:, constraints: [], tags: [], agent: "WORKFLOW_ENGINE", priority: 1)
+        context = constraints.any? ? "Constraints: #{constraints.join('; ')}" : ""
+
+        store_episode(
+          type: "business_intent",
+          title: title,
+          description: description,
+          context: context,
+          tags: tags,
+          agent: agent,
+          metadata: {
+            "intent_kind" => "business",
+            "constraints" => constraints,
+            "priority" => priority
+          }
+        )
+      end
+
+      def store_feature_intent(title:, description:, acceptance_criteria: [], non_goals: [], tags: [], agent: "ARCHITECT", related_task_id: nil)
+        context_parts = []
+        context_parts << "Acceptance: #{acceptance_criteria.join('; ')}" if acceptance_criteria.any?
+        context_parts << "Non-goals: #{non_goals.join('; ')}" if non_goals.any?
+
+        store_episode(
+          type: "feature_intent",
+          title: title,
+          description: description,
+          context: context_parts.join(" | "),
+          tags: tags,
+          agent: agent,
+          related_task_id: related_task_id,
+          metadata: {
+            "intent_kind" => "feature",
+            "acceptance_criteria" => acceptance_criteria,
+            "non_goals" => non_goals
+          }
+        )
+      end
+
       def find_similar_tasks(query_embedding:, limit: 5, language: nil, task_type: nil)
-        # TODO: Implement vector similarity search
-        []
+        return [] if query_embedding.nil? || query_embedding.empty?
+
+        query = query_embedding.map(&:to_f)
+        candidates = []
+        cursor = "0"
+
+        loop do
+          cursor, batch = @client.scan(cursor, match: "semantic:*", count: 100)
+          batch.each do |key|
+            task = @client.hgetall(key)
+            next if task.nil? || task.empty?
+            next unless task["project"] == @project
+            next if language && task["language"] != language
+            next if task_type && task["task_type"] != task_type
+
+            embedding = parse_embedding(task["embedding"])
+            next if embedding.empty?
+
+            score = cosine_similarity(query, embedding)
+            next if score <= 0
+
+            task["score"] = score
+            candidates << task
+          end
+          break if cursor == "0"
+        end
+
+        candidates.sort_by { |candidate| -candidate["score"] }.first(limit)
+      end
+
+      def get_memories_by_type(type:, limit: 10)
+        if @search_supported
+          query = "@type:#{type} @project:{#{@project}}"
+          search_episodic(query: query, limit: limit)
+        else
+          fetch_memories_without_search(limit: [limit * 4, 100].min).select { |mem| mem["type"] == type }.first(limit)
+        end
+      end
+
+      def get_intents(kind: nil, limit: 10)
+        return get_memories_by_type(type: "business_intent", limit: limit) if kind == "business"
+        return get_memories_by_type(type: "feature_intent", limit: limit) if kind == "feature"
+
+        intents = get_memories_by_type(type: "business_intent", limit: limit)
+        feature_limit = [limit - intents.length, 0].max
+        return intents if feature_limit.zero?
+
+        intents + get_memories_by_type(type: "feature_intent", limit: feature_limit)
+      end
+
+      def get_relevant_context(agent:, query_embedding: nil, task_type: nil, limit: 8)
+        memories = get_recent_memories(limit: [limit * 4, 100].min)
+        relevant_memories = memories.select do |mem|
+          matching_agent = mem["agent"] == agent || mem["agent"] == "WORKFLOW_ENGINE"
+          core_type = %w[lesson pitfall success business_intent feature_intent].include?(mem["type"])
+          matching_agent && core_type
+        end.first(limit)
+
+        {
+          "agent" => agent,
+          "intent" => get_intents(limit: 4),
+          "memories" => relevant_memories,
+          "similar_tasks" => find_similar_tasks(query_embedding: query_embedding, limit: 3, task_type: task_type)
+        }
       end
 
       def get_pitfalls(limit: 10)
         if @search_supported
-          results = @client.call(
-            "FT.SEARCH", "episodic:logs",
-            "@type:pitfall @project:{#{@project}}",
-            "LIMIT", "0", limit.to_s
-          )
-
-          return [] unless results && results[0] > 0
-
-          pitfalls = []
-          (2...results.length).step(2) do |i|
-            item = results[i]
-            if item.is_a?(Array) && item[0] == "$"
-              begin
-                pitfall = JSON.parse(item[1])
-                pitfalls << pitfall
-              rescue JSON::ParserError
-                # Skip invalid JSON
-              end
-            end
-          end
-          pitfalls
+          search_episodic(query: "@type:pitfall @project:{#{@project}}", limit: limit)
         else
           fetch_memories_without_search(limit: limit).select { |mem| mem["type"] == "pitfall" }
         end
@@ -152,32 +234,7 @@ module Agentf
 
       def get_recent_memories(limit: 10)
         if @search_supported
-          results = @client.call(
-            "FT.SEARCH", "episodic:logs",
-            "@project:{#{@project}}",
-            "SORTBY", "created_at", "DESC",
-            "LIMIT", "0", limit.to_s
-          )
-
-          return [] unless results && results[0] > 0
-
-          memories = []
-          (2...results.length).step(2) do |i|
-            item = results[i]
-            if item.is_a?(Array)
-              item.each_with_index do |part, j|
-                if part == "$" && j + 1 < item.length
-                  begin
-                    memory = JSON.parse(item[j + 1])
-                    memories << memory
-                  rescue JSON::ParserError
-                    # Skip invalid JSON
-                  end
-                end
-              end
-            end
-          end
-          memories
+          search_episodic(query: "@project:{#{@project}}", limit: limit)
         else
           fetch_memories_without_search(limit: limit)
         end
@@ -223,8 +280,39 @@ module Agentf
           "$.tags", "AS", "tags", "TAG",
           "$.created_at", "AS", "created_at", "NUMERIC",
           "$.agent", "AS", "agent", "TEXT",
-          "$.related_task_id", "AS", "related_task_id", "TEXT"
+          "$.related_task_id", "AS", "related_task_id", "TEXT",
+          "$.metadata.intent_kind", "AS", "intent_kind", "TAG",
+          "$.metadata.priority", "AS", "priority", "NUMERIC"
         )
+      end
+
+      def search_episodic(query:, limit:)
+        results = @client.call(
+          "FT.SEARCH", "episodic:logs",
+          query,
+          "SORTBY", "created_at", "DESC",
+          "LIMIT", "0", limit.to_s
+        )
+
+        return [] unless results && results[0] > 0
+
+        memories = []
+        (2...results.length).step(2) do |i|
+          item = results[i]
+          if item.is_a?(Array)
+            item.each_with_index do |part, j|
+              if part == "$" && j + 1 < item.length
+                begin
+                  memory = JSON.parse(item[j + 1])
+                  memories << memory
+                rescue JSON::ParserError
+                  # Skip invalid JSON
+                end
+              end
+            end
+          end
+        end
+        memories
       end
 
       def index_already_exists?(error)
@@ -327,11 +415,30 @@ module Agentf
         nil
       end
 
+      def parse_embedding(raw)
+        return [] if raw.nil? || raw.empty?
+
+        value = raw.is_a?(String) ? JSON.parse(raw) : raw
+        return [] unless value.is_a?(Array)
+
+        value.map(&:to_f)
+      rescue JSON::ParserError
+        []
+      end
+
+      def cosine_similarity(a, b)
+        return 0.0 if a.empty? || b.empty? || a.length != b.length
+
+        dot_product = a.zip(b).sum { |x, y| x * y }
+        magnitude_a = Math.sqrt(a.sum { |x| x * x })
+        magnitude_b = Math.sqrt(b.sum { |x| x * x })
+        return 0.0 if magnitude_a.zero? || magnitude_b.zero?
+
+        dot_product / (magnitude_a * magnitude_b)
+      end
+
       def client_options
-        options = { url: @redis_url, decode_responses: true }
-        password = (@redis_password.respond_to?(:empty?) && @redis_password.empty?) ? nil : @redis_password
-        options[:password] = password if password
-        options
+        { url: @redis_url, decode_responses: true }
       end
     end
 

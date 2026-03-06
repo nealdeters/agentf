@@ -1,22 +1,42 @@
 # frozen_string_literal: true
 
 require_relative "base"
-require_relative "../tools/debugger"
+require_relative "../commands"
 
 module Agentf
   module Agents
     # Debugger Agent - Error analysis and diagnosis
     class Debugger < Base
-      def initialize(memory, tools: nil)
+      DESCRIPTION = "Error analysis, diagnosis, and remediation guidance."
+      COMMANDS = %w[parse_error analyze_logs suggest_fix].freeze
+      MEMORY_CONCEPTS = {
+        "reads" => [],
+        "writes" => ["store_episode"],
+        "policy" => "Persist debugging lessons with root cause and proposed fixes."
+      }.freeze
+
+      def self.description
+        DESCRIPTION
+      end
+
+      def self.commands
+        COMMANDS
+      end
+
+      def self.memory_concepts
+        MEMORY_CONCEPTS
+      end
+
+      def initialize(memory, commands: nil)
         super(memory)
-        @tools = tools || Agentf::Tools::Debugger.new
+        @commands = commands || Agentf::Commands::Debugger.new
       end
 
       def diagnose(error, context: nil)
         log "Diagnosing error"
         log "  Error: #{error[0..100]}..."
 
-        analysis = @tools.parse_error(error)
+        analysis = @commands.parse_error(error)
 
         memory.store_episode(
           type: "lesson",

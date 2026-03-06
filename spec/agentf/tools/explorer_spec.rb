@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Agentf::Tools::Explorer do
+RSpec.describe Agentf::Commands::Explorer do
   let(:base_path) { File.expand_path("../../fixtures", __dir__) }
 
   subject(:explorer) { described_class.new(base_path: base_path) }

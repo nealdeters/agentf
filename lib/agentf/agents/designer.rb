@@ -1,21 +1,41 @@
 # frozen_string_literal: true
 
 require_relative "base"
-require_relative "../tools/designer"
+require_relative "../commands"
 
 module Agentf
   module Agents
     # Designer Agent - Design specs to implementation
     class Designer < Base
-      def initialize(memory, tools: nil)
+      DESCRIPTION = "UI/UX implementation from design specs."
+      COMMANDS = %w[generate_component validate_design_system].freeze
+      MEMORY_CONCEPTS = {
+        "reads" => [],
+        "writes" => ["store_success"],
+        "policy" => "Capture successful design implementation patterns."
+      }.freeze
+
+      def self.description
+        DESCRIPTION
+      end
+
+      def self.commands
+        COMMANDS
+      end
+
+      def self.memory_concepts
+        MEMORY_CONCEPTS
+      end
+
+      def initialize(memory, commands: nil)
         super(memory)
-        @tools = tools || Agentf::Tools::Designer.new
+        @commands = commands || Agentf::Commands::Designer.new
       end
 
       def implement_design(design_spec, framework: "react")
         log "Implementing design: #{design_spec}"
 
-        spec = @tools.generate_component("GeneratedComponent", design_spec)
+        spec = @commands.generate_component("GeneratedComponent", design_spec)
 
         memory.store_success(
           title: "Implemented design: #{design_spec}",

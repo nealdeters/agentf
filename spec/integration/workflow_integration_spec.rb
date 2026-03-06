@@ -22,6 +22,27 @@ RSpec.describe "Agent workflow integration" do
       @records.flat_map { |mem| mem["tags"] || [] }.uniq
     end
 
+    def get_relevant_context(agent:, query_embedding: nil, task_type: nil, limit: 8)
+      {
+        "agent" => agent,
+        "intent" => @records.select { |mem| %w[business_intent feature_intent].include?(mem["type"]) }.last(limit),
+        "memories" => @records.last(limit),
+        "similar_tasks" => []
+      }
+    end
+
+    def store_feature_intent(title:, description:, acceptance_criteria: [], non_goals: [], tags: [], agent: "WORKFLOW_ENGINE", related_task_id: nil)
+      store_episode(
+        type: "feature_intent",
+        title: title,
+        description: description,
+        context: ["Acceptance: #{acceptance_criteria.join('; ')}", "Non-goals: #{non_goals.join('; ')}"].reject(&:empty?).join(" | "),
+        tags: tags,
+        agent: agent,
+        related_task_id: related_task_id
+      )
+    end
+
     def store_episode(type:, title:, description:, context: "", code_snippet: "", tags: [], agent: "SPECIALIST", related_task_id: nil)
       record = {
         "id" => "episode_#{@records.size + 1}",
@@ -59,10 +80,10 @@ RSpec.describe "Agent workflow integration" do
 
   let(:memory) { FakeMemory.new }
   let(:base_path) { File.expand_path("../fixtures", __dir__) }
-  let(:orchestrator) { Agentf::Orchestrator.new(memory: memory, base_path: base_path) }
+  let(:engine) { Agentf::WorkflowEngine.new(memory: memory, base_path: base_path, provider: :opencode) }
 
   before do
-    allow_any_instance_of(Agentf::Orchestrator).to receive(:log)
+    allow_any_instance_of(Agentf::WorkflowEngine).to receive(:log)
     allow_any_instance_of(Agentf::Agents::Base).to receive(:log)
   end
 
@@ -79,7 +100,7 @@ RSpec.describe "Agent workflow integration" do
         }
       }
 
-      result = orchestrator.execute_workflow("Add new UI feature", context: context)
+      result = engine.execute("Add new UI feature", context: context)
 
       expect(result["workflow_type"]).to eq("feature")
       expect(result["completed_agents"]).to eq(%w[ARCHITECT EXPLORER DESIGNER SPECIALIST TESTER SECURITY REVIEWER DOCUMENTER])
@@ -97,7 +118,7 @@ RSpec.describe "Agent workflow integration" do
 
       documenter_result = result["results"].find { |r| r["agent"] == "DOCUMENTER" }
       expect(documenter_result["result"]["successes"]).not_to be_empty
-      expect(documenter_result["result"]["total_memories"]).to eq(memory.records.size)
+      expect(documenter_result["result"]["total_memories"]).to eq(memory.records.size - 1)
     end
   end
 
@@ -114,7 +135,7 @@ RSpec.describe "Agent workflow integration" do
         }
       }
 
-      result = orchestrator.execute_workflow("Fix payment bug", context: context)
+      result = engine.execute("Fix payment bug", context: context)
 
       expect(result["workflow_type"]).to eq("bugfix")
       expect(result["completed_agents"]).to eq(%w[ARCHITECT DEBUGGER SPECIALIST TESTER SECURITY REVIEWER])

@@ -36,32 +36,33 @@ plan["subtasks"].each do |subtask|
   puts "  Subtask #{subtask['id']}: #{review['approved'] ? 'Approved' : 'Issues found'}"
 end
 
-# Example 2: Use tools directly
-puts "\n--- Example 2: Using Tools ---"
+# Example 2: Use commands directly
+puts "\n--- Example 2: Using Commands ---"
 
-explorer = Agentf::Tools::Explorer.new
+explorer = Agentf::Commands::Explorer.new
 files = explorer.glob("lib/**/*.rb")
 puts "Found #{files.size} Ruby files"
 
-tester = Agentf::Tools::Tester.new
+tester = Agentf::Commands::Tester.new
 framework = tester.detect_framework
 puts "Detected test framework: #{framework}"
 
-debugger_tool = Agentf::Tools::Debugger.new
+debugger_tool = Agentf::Commands::Debugger.new
 analysis = debugger_tool.parse_error("NoMethodError: undefined method 'foo' for nil:NilClass")
 puts "Parsed error: #{analysis.error_type}"
 
-# Example 3: Orchestrated workflow
-puts "\n--- Example 3: Orchestrated Workflow ---"
+# Example 3: Provider-adapted workflow
+puts "\n--- Example 3: Provider-Adapted Workflow ---"
 
-orchestrator = Agentf::Orchestrator.new(memory: memory)
-result = orchestrator.execute_workflow(
+engine = Agentf::WorkflowEngine.new(memory: memory, provider: :opencode)
+result = engine.execute(
   "Create a login form component",
   context: { "design_spec" => "Login form with email and password fields" }
 )
 
 puts "\nWorkflow completed!"
-puts "Status: #{result.dig('workflow_state', 'status') || 'completed'}"
+puts "Provider: #{result['provider']}"
+puts "Status: #{result['results'].any? { |entry| entry.dig('result', 'error') } ? 'failed' : 'completed'}"
 
 # Clean up
 memory.close

@@ -1,21 +1,41 @@
 # frozen_string_literal: true
 
 require_relative "base"
-require_relative "../tools/explorer"
+require_relative "../commands"
 
 module Agentf
   module Agents
     # Explorer Agent - Codebase exploration
     class Explorer < Base
-      def initialize(memory, tools: nil)
+      DESCRIPTION = "Rapid codebase exploration and context gathering."
+      COMMANDS = %w[glob grep read_file].freeze
+      MEMORY_CONCEPTS = {
+        "reads" => [],
+        "writes" => ["store_episode"],
+        "policy" => "Store exploration breadcrumbs as episodic memories."
+      }.freeze
+
+      def self.description
+        DESCRIPTION
+      end
+
+      def self.commands
+        COMMANDS
+      end
+
+      def self.memory_concepts
+        MEMORY_CONCEPTS
+      end
+
+      def initialize(memory, commands: nil)
         super(memory)
-        @tools = tools || Agentf::Tools::Explorer.new
+        @commands = commands || Agentf::Commands::Explorer.new
       end
 
       def explore(query, file_pattern: nil)
         log "Exploring: #{query}"
 
-        files = @tools.glob(query, file_types: nil)
+        files = @commands.glob(query, file_types: nil)
 
         memory.store_episode(
           type: "exploration",

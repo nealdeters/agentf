@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Agentf::Tools::ComponentSpec do
+RSpec.describe Agentf::Commands::ComponentSpec do
   subject(:component) do
     described_class.new(
       name: "Button",

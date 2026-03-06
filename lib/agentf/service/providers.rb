@@ -1,0 +1,130 @@
+# frozen_string_literal: true
+
+module Agentf
+  module Service
+    module Providers
+      class Base
+        def name
+          self.class.name.split("::").last.upcase
+        end
+
+        def build_plan(task:, context: {}, logger: nil)
+          logger&.call("[#{name}] Analyzing task: #{task}")
+
+          workflow_type = classify_task(task)
+          agents_needed = workflow_templates.fetch(workflow_type)
+
+          logger&.call("[#{name}] Workflow type: #{workflow_type}")
+          logger&.call("[#{name}] Agents needed: #{agents_needed.join(', ')}")
+
+          {
+            "provider" => name,
+            "task" => task,
+            "context" => context,
+            "workflow_type" => workflow_type,
+            "agents_needed" => agents_needed
+          }
+        end
+
+        def classify_task(task)
+          task_lower = task.downcase
+
+          case
+          when task_lower =~ /quick|small|simple/ then "quick_fix"
+          when task_lower =~ /fix|bug|error|issue|broken/ then "bugfix"
+          when task_lower =~ /explore|find|search|where/ then "exploration"
+          when task_lower =~ /refactor|improve|cleanup/ then "refactor"
+          else
+            "feature"
+          end
+        end
+
+        def workflow_templates
+          raise NotImplementedError, "#{self.class} must implement #workflow_templates"
+        end
+
+        def execute_agent(agent_name:, task:, context:, agents:, commands:, logger: nil)
+          logger&.call("→ Calling #{agent_name}")
+
+          agent = agents[agent_name]
+          return { "error" => "Agent #{agent_name} not found" } unless agent
+
+          result = case agent_name
+                   when "ARCHITECT"
+                     agent.plan_task(task)
+                   when "EXPLORER"
+                     query = context["explore_query"] || "*.rb"
+                     files = commands.fetch("explorer").glob(query)
+                     response = agent.explore(query)
+                     response["files"] = files
+                     response
+                   when "TESTER"
+                     source_file = context["source_file"] || "app/models/application_record.rb"
+                     template = commands.fetch("tester").generate_unit_tests(source_file)
+                     response = agent.generate_tests(source_file)
+                     response["generated_code"] = template.test_code
+                     response
+                   when "DEBUGGER"
+                     error = context["error"] || "No error provided"
+                     analysis = commands.fetch("debugger").parse_error(error)
+                     response = agent.diagnose(error, context: context["error_context"])
+                     response["analysis"] = {
+                       "error_type" => analysis.error_type,
+                       "root_cause" => analysis.possible_causes,
+                       "suggested_fix" => analysis.suggested_fix
+                     }
+                     response
+                   when "DESIGNER"
+                     design_spec = context["design_spec"] || "Create a card component"
+                     spec = commands.fetch("designer").generate_component("GeneratedComponent", design_spec)
+                     response = agent.implement_design(design_spec)
+                     response["generated_code"] = spec.code
+                     response
+                   when "SPECIALIST"
+                     subtask = context["current_subtask"] || { "description" => task }
+                     agent.execute(subtask)
+                   when "SECURITY"
+                     agent.assess(task: task, context: context)
+                   when "REVIEWER"
+                     last_result = context["execution"] || {}
+                     agent.review(last_result)
+                   when "DOCUMENTER"
+                     agent.sync_docs("project")
+                   else
+                     { "status" => "not_implemented" }
+                   end
+
+          logger&.call("→ #{agent_name} Complete")
+          result
+        rescue StandardError => e
+          logger&.call("→ #{agent_name} Error: #{e.message}")
+          { "error" => e.message, "agent" => agent_name }
+        end
+      end
+
+      class OpenCode < Base
+        def workflow_templates
+          {
+            "feature" => %w[ARCHITECT EXPLORER DESIGNER SPECIALIST TESTER SECURITY REVIEWER DOCUMENTER],
+            "bugfix" => %w[ARCHITECT DEBUGGER SPECIALIST TESTER SECURITY REVIEWER],
+            "quick_fix" => %w[SPECIALIST SECURITY REVIEWER],
+            "exploration" => %w[EXPLORER],
+            "refactor" => %w[ARCHITECT EXPLORER SPECIALIST TESTER SECURITY REVIEWER]
+          }
+        end
+      end
+
+      class Copilot < Base
+        def workflow_templates
+          {
+            "feature" => %w[ARCHITECT SPECIALIST TESTER SECURITY REVIEWER DOCUMENTER],
+            "bugfix" => %w[DEBUGGER SPECIALIST TESTER SECURITY REVIEWER],
+            "quick_fix" => %w[SPECIALIST REVIEWER],
+            "exploration" => %w[EXPLORER],
+            "refactor" => %w[ARCHITECT SPECIALIST TESTER REVIEWER]
+          }
+        end
+      end
+    end
+  end
+end

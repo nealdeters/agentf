@@ -54,6 +54,36 @@ RSpec.describe Agentf::Memory::RedisMemory do
     end
   end
 
+  describe "intent APIs" do
+    it "responds to business intent storage" do
+      memory = described_class.new(project: project)
+      expect(memory).to respond_to(:store_business_intent)
+    end
+
+    it "responds to feature intent storage" do
+      memory = described_class.new(project: project)
+      expect(memory).to respond_to(:store_feature_intent)
+    end
+
+    it "responds to intent retrieval" do
+      memory = described_class.new(project: project)
+      expect(memory).to respond_to(:get_intents)
+    end
+
+    it "stores and retrieves business intent" do
+      memory = described_class.new(project: project)
+      memory.store_business_intent(
+        title: "Reliability",
+        description: "Prioritize uptime",
+        constraints: ["No downtime"],
+        tags: ["ops"]
+      )
+
+      intents = memory.get_intents(kind: "business", limit: 10)
+      expect(intents.map { |intent| intent["type"] }).to include("business_intent")
+    end
+  end
+
   describe "#find_similar_tasks" do
     it "returns empty array (not implemented)" do
       memory = described_class.new(project: project)
@@ -77,6 +107,28 @@ RSpec.describe Agentf::Memory::RedisMemory do
       memory = described_class.new(project: project)
       result = memory.find_similar_tasks(query_embedding: [], task_type: "feature")
       expect(result).to eq([])
+    end
+
+    it "returns similar tasks by embedding score" do
+      memory = described_class.new(project: project)
+      memory.store_task(content: "Build auth", embedding: [1.0, 0.0], task_type: "feature", language: "ruby")
+      memory.store_task(content: "Fix bug", embedding: [0.0, 1.0], task_type: "bugfix", language: "ruby")
+
+      result = memory.find_similar_tasks(query_embedding: [0.9, 0.1], limit: 1)
+
+      expect(result.length).to eq(1)
+      expect(result.first["content"]).to eq("Build auth")
+    end
+  end
+
+  describe "#get_relevant_context" do
+    it "returns structured context with intents and memories" do
+      memory = described_class.new(project: project)
+      context = memory.get_relevant_context(agent: "ARCHITECT", query_embedding: [0.2, 0.1], limit: 3)
+
+      expect(context).to have_key("intent")
+      expect(context).to have_key("memories")
+      expect(context).to have_key("similar_tasks")
     end
   end
 

@@ -4,8 +4,21 @@ require "json"
 require "pathname"
 
 module Agentf
-  module Tools
+  module Commands
     class Designer
+      NAME = "designer"
+
+      def self.manifest
+        {
+          "name" => NAME,
+          "description" => "Generate components from design specs and validate design systems.",
+          "commands" => [
+            { "name" => "generate_component", "type" => "function" },
+            { "name" => "validate_design_system", "type" => "function" }
+          ]
+        }
+      end
+
       def initialize(base_path: nil)
         @base_path = base_path || Agentf.config.base_path
         detect_design_system
