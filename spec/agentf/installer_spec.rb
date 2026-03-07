@@ -33,7 +33,7 @@ RSpec.describe Agentf::Installer do
       expect(File.read(agent_path)).to include("## Memory Integration")
       expect(File.read(agent_path)).to include("## Memory Actions")
       expect(File.read(agent_path)).to include("## Policy Boundaries")
-      expect(File.read(agent_path)).to include("agentf_memory_recent")
+      expect(File.read(agent_path)).to include("agentf-memory-recent")
       expect(File.read(agent_path)).to include("get_recent_memories")
     end
 
@@ -53,7 +53,7 @@ RSpec.describe Agentf::Installer do
       expect(File).to exist(agent_manifest)
       expect(File).to exist(command_manifest)
       expect(File.read(agent_manifest)).to include("## Copilot MCP Integration")
-      expect(File.read(agent_manifest)).to include("code_glob")
+      expect(File.read(agent_manifest)).to include("agentf-code-glob")
       expect(File.read(command_manifest)).to include("## Copilot MCP Usage")
     end
 
@@ -77,7 +77,10 @@ RSpec.describe Agentf::Installer do
       expect(File).to exist(memory_schema)
       expect(File).to exist(opencode_json)
       expect(File.read(workflow_agent)).to include("# AGENTF-WORKFLOW-ENGINE Agent")
-      expect(File.read(plugin)).to include("export const agentfPlugin")
+      plugin_content = File.read(plugin)
+      expect(plugin_content).to include("export const agentfPlugin")
+      expect(plugin_content).to include("export default agentfPlugin")
+      expect(plugin_content).to include("tools:")
       expect(File.read(plugin)).to include("AGENTF_GEM_PATH")
       expect(File.read(memory_schema)).to include("# Redis Memory Schema")
       expect(File.read(opencode_json)).to include('"plugin"')
@@ -124,8 +127,8 @@ RSpec.describe Agentf::Installer do
       content = File.read(agent_path)
 
       # Architect reads get_recent_memories and get_pitfalls
-      expect(content).to include("agentf_memory_recent")
-      expect(content).to include("agentf_memory_recent")
+      expect(content).to include("agentf-memory-recent")
+      expect(content).to include("agentf-memory-recent")
     end
 
     it "includes read fallback for agents with no explicit reads" do
@@ -143,7 +146,7 @@ RSpec.describe Agentf::Installer do
 
       # Specialist has no reads, so fallback should add a read action
       expect(content).to include("Read:")
-      expect(content).to include("agentf_memory_recent")
+      expect(content).to include("agentf-memory-recent")
     end
   end
 end

@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
-require "mcp"
+begin
+  require "mcp"
+rescue LoadError
+  require_relative "stub"
+end
 require "json"
 
 module Agentf
@@ -17,22 +21,22 @@ module Agentf
     #   AGENTF_MCP_MAX_ARG_LENGTH - max length per string argument
     class Server
       KNOWN_TOOLS = %w[
-        code_glob
-        code_grep
-        code_tree
-        code_related_files
-        architecture_analyze_layers
-        memory_recent
-        memory_search
-        memory_add_lesson
-        memory_add_success
-        memory_add_pitfall
+        agentf-code-glob
+        agentf-code-grep
+        agentf-code-tree
+        agentf-code-related-files
+        agentf-architecture-analyze-layers
+        agentf-memory-recent
+        agentf-memory-search
+        agentf-memory-add-lesson
+        agentf-memory-add-success
+        agentf-memory-add-pitfall
       ].freeze
 
       WRITE_TOOLS = Set.new(%w[
-        memory_add_lesson
-        memory_add_success
-        memory_add_pitfall
+        agentf-memory-add-lesson
+        agentf-memory-add-success
+        agentf-memory-add-pitfall
       ]).freeze
 
       attr_reader :server, :guardrails
@@ -132,25 +136,25 @@ module Agentf
         explorer = @explorer
         mcp_server = self
 
-        s.tool("code_glob") do
+        s.tool("agentf-code-glob") do
           description "Find files using project glob patterns."
           argument :pattern, String, required: true, description: "Glob pattern, e.g. lib/**/*.rb"
           argument :types, Array, required: false, items: String, description: "File extensions to filter, e.g. [\"rb\",\"py\"]"
           call do |args|
-            mcp_server.send(:guard!, "code_glob", **args)
+            mcp_server.send(:guard!, "agentf-code-glob", **args)
             file_types = args[:types]&.empty? ? nil : args[:types]
             results = explorer.glob(args[:pattern], file_types: file_types)
             JSON.generate(pattern: args[:pattern], matches: results, count: results.length)
           end
         end
 
-        s.tool("code_grep") do
+        s.tool("agentf-code-grep") do
           description "Search file contents with regex."
           argument :pattern, String, required: true, description: "Regex or text to search"
           argument :file_pattern, String, required: false, description: "Include pattern, e.g. *.rb"
           argument :context_lines, Integer, required: false, description: "Context lines (0-20)"
           call do |args|
-            mcp_server.send(:guard!, "code_grep", **args)
+            mcp_server.send(:guard!, "agentf-code-grep", **args)
             ctx = args[:context_lines] || 2
             matches = explorer.grep(args[:pattern], file_pattern: args[:file_pattern], context_lines: ctx)
             serialized = matches.map { |m| m.respond_to?(:to_h) ? m.to_h : m }
@@ -158,22 +162,22 @@ module Agentf
           end
         end
 
-        s.tool("code_tree") do
+        s.tool("agentf-code-tree") do
           description "Get directory tree structure."
           argument :depth, Integer, required: false, description: "Max traversal depth (1-10)"
           call do |args|
-            mcp_server.send(:guard!, "code_tree", **args)
+            mcp_server.send(:guard!, "agentf-code-tree", **args)
             max_depth = args[:depth] || 3
             tree = explorer.get_file_tree(max_depth: max_depth)
             JSON.generate(max_depth: max_depth, tree: tree)
           end
         end
 
-        s.tool("code_related_files") do
+        s.tool("agentf-code-related-files") do
           description "Find imports and related files for a target file."
           argument :target_file, String, required: true, description: "Workspace-relative file path"
           call do |args|
-            mcp_server.send(:guard!, "code_related_files", **args)
+            mcp_server.send(:guard!, "agentf-code-related-files", **args)
             related = explorer.find_related_files(args[:target_file])
             JSON.generate(target_file: args[:target_file], related: related)
           end
@@ -187,28 +191,28 @@ module Agentf
         memory = @memory
         mcp_server = self
 
-        s.tool("memory_recent") do
+        s.tool("agentf-memory-recent") do
           description "Get recent memories from Redis."
           argument :limit, Integer, required: false, description: "How many memories to return (1-100)"
           call do |args|
-            mcp_server.send(:guard!, "memory_recent", **args)
+            mcp_server.send(:guard!, "agentf-memory-recent", **args)
             result = reviewer.get_recent_memories(limit: args[:limit] || 10)
             JSON.generate(result)
           end
         end
 
-        s.tool("memory_search") do
+        s.tool("agentf-memory-search") do
           description "Search memories by keyword."
           argument :query, String, required: true, description: "Search query"
           argument :limit, Integer, required: false, description: "How many results to return (1-100)"
           call do |args|
-            mcp_server.send(:guard!, "memory_search", **args)
+            mcp_server.send(:guard!, "agentf-memory-search", **args)
             result = reviewer.search(args[:query], limit: args[:limit] || 10)
             JSON.generate(result)
           end
         end
 
-        s.tool("memory_add_lesson") do
+        s.tool("agentf-memory-add-lesson") do
           description "Store a lesson memory in Redis."
           argument :title, String, required: true, description: "Lesson title"
           argument :description, String, required: true, description: "Lesson description"
@@ -216,7 +220,7 @@ module Agentf
           argument :tags, Array, required: false, items: String, description: "Tags"
           argument :context, String, required: false, description: "Context"
           call do |args|
-            mcp_server.send(:guard!, "memory_add_lesson", **args)
+            mcp_server.send(:guard!, "agentf-memory-add-lesson", **args)
             id = memory.store_episode(
               type: "lesson",
               title: args[:title],
@@ -230,7 +234,7 @@ module Agentf
           end
         end
 
-        s.tool("memory_add_success") do
+        s.tool("agentf-memory-add-success") do
           description "Store a success memory in Redis."
           argument :title, String, required: true, description: "Success title"
           argument :description, String, required: true, description: "Success description"
@@ -238,7 +242,7 @@ module Agentf
           argument :tags, Array, required: false, items: String, description: "Tags"
           argument :context, String, required: false, description: "Context"
           call do |args|
-            mcp_server.send(:guard!, "memory_add_success", **args)
+            mcp_server.send(:guard!, "agentf-memory-add-success", **args)
             id = memory.store_episode(
               type: "success",
               title: args[:title],
@@ -252,7 +256,7 @@ module Agentf
           end
         end
 
-        s.tool("memory_add_pitfall") do
+        s.tool("agentf-memory-add-pitfall") do
           description "Store a pitfall memory in Redis."
           argument :title, String, required: true, description: "Pitfall title"
           argument :description, String, required: true, description: "Pitfall description"
@@ -260,7 +264,7 @@ module Agentf
           argument :tags, Array, required: false, items: String, description: "Tags"
           argument :context, String, required: false, description: "Context"
           call do |args|
-            mcp_server.send(:guard!, "memory_add_pitfall", **args)
+            mcp_server.send(:guard!, "agentf-memory-add-pitfall", **args)
             id = memory.store_episode(
               type: "pitfall",
               title: args[:title],
@@ -279,13 +283,13 @@ module Agentf
         architecture = @architecture
         mcp_server = self
 
-        s.tool("architecture_analyze_layers") do
+        s.tool("agentf-architecture-analyze-layers") do
           description "Analyze architecture layers, review violations, or create gradual adoption plans."
           argument :mode, String, required: false, description: "analyze|review|gradual"
           argument :limit, Integer, required: false, description: "Maximum violations to return for review mode"
           argument :goal, String, required: false, description: "Adoption goal for gradual mode"
           call do |args|
-            mcp_server.send(:guard!, "architecture_analyze_layers", **args)
+            mcp_server.send(:guard!, "agentf-architecture-analyze-layers", **args)
             case (args[:mode] || "analyze").to_s
             when "review"
               JSON.generate(architecture.review_layer_violations(limit: args[:limit] || 20))

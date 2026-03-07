@@ -152,16 +152,16 @@ agentf mcp-server
 ```
 
 Exposed MCP tools (10):
-- `code_glob` — find files by glob pattern
-- `code_grep` — search file contents by regex
-- `code_tree` — get directory tree
-- `code_related_files` — find imports/related files
-- `architecture_analyze_layers` - analyze layers, review violations, or build gradual adoption plans
-- `memory_recent` — list recent memories
-- `memory_search` — search memories by keyword
-- `memory_add_lesson` — store a lesson
-- `memory_add_success` — store a success
-- `memory_add_pitfall` — store a pitfall
+- `agentf-code-glob` — find files by glob pattern
+- `agentf-code-grep` — search file contents by regex
+- `agentf-code-tree` — get directory tree
+- `agentf-code-related-files` — find imports/related files
+- `agentf-architecture-analyze-layers` - analyze layers, review violations, or build gradual adoption plans
+- `agentf-memory-recent` — list recent memories
+- `agentf-memory-search` — search memories by keyword
+- `agentf-memory-add-lesson` — store a lesson
+- `agentf-memory-add-success` — store a success
+- `agentf-memory-add-pitfall` — store a pitfall
 
 ### Guardrails
 
@@ -185,7 +185,7 @@ Register the MCP server in your MCP client configuration:
       "args": ["mcp-server"],
       "env": {
         "AGENTF_MCP_ALLOW_WRITES": "false",
-        "AGENTF_MCP_ALLOWED_TOOLS": "code_glob,code_grep,code_tree,code_related_files,memory_recent,memory_search"
+        "AGENTF_MCP_ALLOWED_TOOLS": "agentf-code-glob,agentf-code-grep,agentf-code-tree,agentf-code-related-files,agentf-memory-recent,agentf-memory-search"
       }
     }
   }

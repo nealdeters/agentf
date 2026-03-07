@@ -6,25 +6,25 @@ require "yaml"
 module Agentf
   class Installer
     READ_ACTIONS = {
-      "get_recent_memories" => { cli: "agentf memory recent -n 10", tool: "agentf_memory_recent" },
-      "get_pitfalls" => { cli: "agentf memory pitfalls -n 10", tool: "agentf_memory_recent" },
-      "get_lessons" => { cli: "agentf memory lessons -n 10", tool: "agentf_memory_recent" },
-      "get_successes" => { cli: "agentf memory successes -n 10", tool: "agentf_memory_recent" },
-      "get_intents" => { cli: "agentf memory intents", tool: "agentf_memory_recent" },
-      "get_all_tags" => { cli: "agentf memory tags", tool: "agentf_memory_recent" },
-      "get_by_tag" => { cli: "agentf memory by-tag <tag> -n 10", tool: "agentf_memory_search" },
-      "get_by_type" => { cli: "agentf memory by-type <type> -n 10", tool: "agentf_memory_search" },
-      "get_by_agent" => { cli: "agentf memory by-agent <agent> -n 10", tool: "agentf_memory_search" },
-      "search" => { cli: "agentf memory search \"<query>\" -n 10", tool: "agentf_memory_search" },
-      "get_summary" => { cli: "agentf memory summary", tool: "agentf_memory_recent" }
+      "get_recent_memories" => { cli: "agentf memory recent -n 10", tool: "agentf-memory-recent" },
+      "get_pitfalls" => { cli: "agentf memory pitfalls -n 10", tool: "agentf-memory-recent" },
+      "get_lessons" => { cli: "agentf memory lessons -n 10", tool: "agentf-memory-recent" },
+      "get_successes" => { cli: "agentf memory successes -n 10", tool: "agentf-memory-recent" },
+      "get_intents" => { cli: "agentf memory intents", tool: "agentf-memory-recent" },
+      "get_all_tags" => { cli: "agentf memory tags", tool: "agentf-memory-recent" },
+      "get_by_tag" => { cli: "agentf memory by-tag <tag> -n 10", tool: "agentf-memory-search" },
+      "get_by_type" => { cli: "agentf memory by-type <type> -n 10", tool: "agentf-memory-search" },
+      "get_by_agent" => { cli: "agentf memory by-agent <agent> -n 10", tool: "agentf-memory-search" },
+      "search" => { cli: "agentf memory search \"<query>\" -n 10", tool: "agentf-memory-search" },
+      "get_summary" => { cli: "agentf memory summary", tool: "agentf-memory-recent" }
     }.freeze
 
     WRITE_ACTIONS = {
-      "store_lesson" => { cli: "agentf memory add-lesson \"<title>\" \"<description>\" --agent=<AGENT> --tags=learning", tool: "agentf_memory_add_lesson" },
-      "store_success" => { cli: "agentf memory add-success \"<title>\" \"<description>\" --agent=<AGENT> --tags=success", tool: "agentf_memory_add_success" },
-      "store_pitfall" => { cli: "agentf memory add-pitfall \"<title>\" \"<description>\" --agent=<AGENT> --tags=pitfall", tool: "agentf_memory_add_pitfall" },
-      "store_business_intent" => { cli: "agentf memory add-business-intent \"<title>\" \"<description>\" --tags=strategy", tool: "agentf_memory_add_lesson" },
-      "store_feature_intent" => { cli: "agentf memory add-feature-intent \"<title>\" \"<description>\" --acceptance=\"<criteria>\"", tool: "agentf_memory_add_lesson" }
+      "store_lesson" => { cli: "agentf memory add-lesson \"<title>\" \"<description>\" --agent=<AGENT> --tags=learning", tool: "agentf-memory-add-lesson" },
+      "store_success" => { cli: "agentf memory add-success \"<title>\" \"<description>\" --agent=<AGENT> --tags=success", tool: "agentf-memory-add-success" },
+      "store_pitfall" => { cli: "agentf memory add-pitfall \"<title>\" \"<description>\" --agent=<AGENT> --tags=pitfall", tool: "agentf-memory-add-pitfall" },
+      "store_business_intent" => { cli: "agentf memory add-business-intent \"<title>\" \"<description>\" --tags=strategy", tool: "agentf-memory-add-lesson" },
+      "store_feature_intent" => { cli: "agentf memory add-feature-intent \"<title>\" \"<description>\" --acceptance=\"<criteria>\"", tool: "agentf-memory-add-lesson" }
     }.freeze
 
     PROVIDER_LAYOUTS = {
@@ -160,7 +160,7 @@ module Agentf
 
     def render_agent_manifest(klass, provider:)
       meta = {
-        "name" => klass.typed_name,
+        "name" => agent_identifier(klass),
         "description" => klass.description,
         "commands" => klass.commands,
         "memory" => klass.memory_concepts,
@@ -211,10 +211,10 @@ module Agentf
       end
 
       if actions.none? { |a| a.start_with?("- Read:") }
-        actions << "- Read: Use `agentf_memory_recent` tool"
+        actions << "- Read: Use `agentf-memory-recent` tool"
       end
       if actions.none? { |a| a.start_with?("- Write:") }
-        actions << "- Write: Use `agentf_memory_add_lesson` tool"
+        actions << "- Write: Use `agentf-memory-add-lesson` tool"
       end
 
       actions
@@ -234,10 +234,18 @@ module Agentf
       end
     end
 
+    def agent_identifier(klass)
+      "agentf-#{klass.typed_name.downcase}"
+    end
+
+    def command_identifier(name)
+      "agentf-#{name.to_s.downcase}"
+    end
+
     def render_command_manifest(manifest, provider:)
       commands = Array(manifest.fetch("commands"))
       frontmatter = {
-        "name" => manifest.fetch("name"),
+        "name" => command_identifier(manifest.fetch("name")),
         "description" => manifest.fetch("description"),
         "commands" => commands
       }
@@ -260,9 +268,9 @@ module Agentf
 
         Copilot should call the local `agentf` MCP server tools for runtime actions.
 
-        - Code discovery tools: `code_glob`, `code_grep`, `code_tree`, `code_related_files`
-        - Memory read tools: `memory_recent`, `memory_search`
-        - Memory write tools (if enabled): `memory_add_lesson`, `memory_add_success`, `memory_add_pitfall`
+        - Code discovery tools: `agentf-code-glob`, `agentf-code-grep`, `agentf-code-tree`, `agentf-code-related-files`
+        - Memory read tools: `agentf-memory-recent`, `agentf-memory-search`
+        - Memory write tools (if enabled): `agentf-memory-add-lesson`, `agentf-memory-add-success`, `agentf-memory-add-pitfall`
 
         MCP server is started via `agentf mcp-server` and runs locally over stdio.
       MARKDOWN
@@ -273,12 +281,12 @@ module Agentf
 
       command_name = manifest.fetch("name")
       recommended_tools = case command_name
-                          when "explorer"
-                            "`code_glob`, `code_grep`, `code_tree`, `code_related_files`"
-                          when "memory"
-                            "`memory_recent`, `memory_search`, `memory_add_lesson`, `memory_add_success`, `memory_add_pitfall`"
-                          else
-                            "`code_glob`, `code_grep`, `memory_recent`, `memory_search`"
+                           when "explorer"
+                             "`agentf-code-glob`, `agentf-code-grep`, `agentf-code-tree`, `agentf-code-related-files`"
+                           when "memory"
+                             "`agentf-memory-recent`, `agentf-memory-search`, `agentf-memory-add-lesson`, `agentf-memory-add-success`, `agentf-memory-add-pitfall`"
+                           else
+                             "`agentf-code-glob`, `agentf-code-grep`, `agentf-memory-recent`, `agentf-memory-search`"
                           end
 
       <<~MARKDOWN
@@ -384,8 +392,8 @@ module Agentf
 
         export const agentfPlugin: Plugin = async () => {
           return {
-            tool: {
-              agentf_code_glob: tool({
+            tools: {
+              "agentf-code-glob": tool({
                 description: "Find files using project glob patterns via Agentf code CLI.",
                 args: {
                   pattern: tool.schema.string().describe("Glob pattern, example: lib/**/*.rb"),
@@ -400,7 +408,7 @@ module Agentf
                   return runAgentfCli(context.directory, "code", "glob", [args.pattern, ...commandArgs]);
                 },
               }),
-              agentf_code_grep: tool({
+              "agentf-code-grep": tool({
                 description: "Search file contents via Agentf code CLI.",
                 args: {
                   pattern: tool.schema.string().describe("Regex/text to search"),
@@ -415,7 +423,7 @@ module Agentf
                   return runAgentfCli(context.directory, "code", "grep", [args.pattern, ...commandArgs]);
                 },
               }),
-              agentf_code_tree: tool({
+              "agentf-code-tree": tool({
                 description: "Get directory tree data via Agentf code CLI.",
                 args: {
                   depth: tool.schema.number().int().min(1).max(10).optional().describe("Max traversal depth"),
@@ -425,7 +433,7 @@ module Agentf
                   return runAgentfCli(context.directory, "code", "tree", [`--depth=${depth}`]);
                 },
               }),
-              agentf_code_related_files: tool({
+              "agentf-code-related-files": tool({
                 description: "Find import and related file hints for a target file.",
                 args: {
                   targetFile: tool.schema.string().describe("Workspace-relative file path"),
@@ -434,7 +442,7 @@ module Agentf
                   return runAgentfCli(context.directory, "code", "related", [args.targetFile]);
                 },
               }),
-              agentf_memory_recent: tool({
+              "agentf-memory-recent": tool({
                 description: "Get recent Agentf memories from Redis.",
                 args: {
                   limit: tool.schema.number().int().min(1).max(100).optional().describe("How many memories to return"),
@@ -444,7 +452,7 @@ module Agentf
                   return runAgentfCli(context.directory, "memory", "recent", ["-n", String(limit)]);
                 },
               }),
-              agentf_memory_search: tool({
+              "agentf-memory-search": tool({
                 description: "Search Agentf memories by keyword.",
                 args: {
                   query: tool.schema.string().describe("Search query"),
@@ -455,7 +463,7 @@ module Agentf
                   return runAgentfCli(context.directory, "memory", "search", [args.query, "-n", String(limit)]);
                 },
               }),
-              agentf_memory_add_lesson: tool({
+              "agentf-memory-add-lesson": tool({
                 description: "Store a lesson memory in Redis.",
                 args: {
                   title: tool.schema.string(),
@@ -473,7 +481,7 @@ module Agentf
                   return runAgentfCli(context.directory, "memory", "add-lesson", commandArgs);
                 },
               }),
-              agentf_memory_add_success: tool({
+              "agentf-memory-add-success": tool({
                 description: "Store a success memory in Redis.",
                 args: {
                   title: tool.schema.string(),
@@ -491,7 +499,7 @@ module Agentf
                   return runAgentfCli(context.directory, "memory", "add-success", commandArgs);
                 },
               }),
-              agentf_memory_add_pitfall: tool({
+              "agentf-memory-add-pitfall": tool({
                 description: "Store a pitfall memory in Redis.",
                 args: {
                   title: tool.schema.string(),
@@ -512,6 +520,8 @@ module Agentf
             },
           };
         };
+
+        export default agentfPlugin;
       TYPESCRIPT
     end
 
