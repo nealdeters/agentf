@@ -157,6 +157,39 @@ module Agentf
         )
       end
 
+      def store_incident(title:, description:, root_cause: "", resolution: "", tags: [], agent: "DEBUGGER", business_capability: nil)
+        store_episode(
+          type: "incident",
+          title: title,
+          description: description,
+          context: ["Root cause: #{root_cause}", "Resolution: #{resolution}"].reject { |entry| entry.end_with?(": ") }.join(" | "),
+          tags: tags,
+          agent: agent,
+          metadata: {
+            "root_cause" => root_cause,
+            "resolution" => resolution,
+            "business_capability" => business_capability,
+            "confidence" => 0.8
+          }
+        )
+      end
+
+      def store_playbook(title:, description:, steps: [], tags: [], agent: "ARCHITECT", feature_area: nil)
+        store_episode(
+          type: "playbook",
+          title: title,
+          description: description,
+          context: steps.any? ? "Steps: #{steps.join('; ')}" : "",
+          tags: tags,
+          agent: agent,
+          metadata: {
+            "steps" => steps,
+            "feature_area" => feature_area,
+            "confidence" => 0.9
+          }
+        )
+      end
+
       def find_similar_tasks(query_embedding:, limit: 5, language: nil, task_type: nil)
         return [] if query_embedding.nil? || query_embedding.empty?
 
@@ -209,17 +242,19 @@ module Agentf
       end
 
       def get_relevant_context(agent:, query_embedding: nil, task_type: nil, limit: 8)
-        memories = get_recent_memories(limit: [limit * 4, 100].min)
-        relevant_memories = memories.select do |mem|
-          matching_agent = mem["agent"] == agent || mem["agent"] == "WORKFLOW_ENGINE"
-          core_type = %w[lesson pitfall success business_intent feature_intent].include?(mem["type"])
-          matching_agent && core_type
-        end.first(limit)
+        get_agent_context(agent: agent, query_embedding: query_embedding, task_type: task_type, limit: limit)
+      end
+
+      def get_agent_context(agent:, query_embedding: nil, task_type: nil, limit: 8)
+        profile = context_profile(agent)
+        candidates = get_recent_memories(limit: [limit * 8, 200].min)
+        ranked = rank_memories(candidates: candidates, agent: agent, profile: profile)
 
         {
           "agent" => agent,
+          "profile" => profile,
           "intent" => get_intents(limit: 4),
-          "memories" => relevant_memories,
+          "memories" => ranked.first(limit),
           "similar_tasks" => find_similar_tasks(query_embedding: query_embedding, limit: 3, task_type: task_type)
         }
       end
@@ -282,7 +317,10 @@ module Agentf
           "$.agent", "AS", "agent", "TEXT",
           "$.related_task_id", "AS", "related_task_id", "TEXT",
           "$.metadata.intent_kind", "AS", "intent_kind", "TAG",
-          "$.metadata.priority", "AS", "priority", "NUMERIC"
+          "$.metadata.priority", "AS", "priority", "NUMERIC",
+          "$.metadata.confidence", "AS", "confidence", "NUMERIC",
+          "$.metadata.business_capability", "AS", "business_capability", "TAG",
+          "$.metadata.feature_area", "AS", "feature_area", "TAG"
         )
       end
 
@@ -390,6 +428,48 @@ module Agentf
         end
 
         memories.sort_by { |mem| -(mem["created_at"] || 0) }.first(limit)
+      end
+
+      def context_profile(agent)
+        case agent.to_s.upcase
+        when "ARCHITECT"
+          { "preferred_types" => %w[business_intent feature_intent lesson playbook pitfall], "pitfall_penalty" => 0.1 }
+        when "SPECIALIST"
+          { "preferred_types" => %w[playbook success lesson pitfall], "pitfall_penalty" => 0.05 }
+        when "TESTER"
+          { "preferred_types" => %w[lesson pitfall incident success], "pitfall_penalty" => 0.0 }
+        when "DEBUGGER"
+          { "preferred_types" => %w[incident pitfall lesson], "pitfall_penalty" => 0.0 }
+        when "SECURITY"
+          { "preferred_types" => %w[pitfall lesson incident], "pitfall_penalty" => 0.0 }
+        else
+          { "preferred_types" => %w[lesson pitfall success business_intent feature_intent], "pitfall_penalty" => 0.05 }
+        end
+      end
+
+      def rank_memories(candidates:, agent:, profile:)
+        now = Time.now.to_i
+        preferred_types = Array(profile["preferred_types"])
+
+        candidates
+          .select { |mem| mem["project"] == @project }
+          .map do |memory|
+            type = memory["type"].to_s
+            metadata = memory["metadata"].is_a?(Hash) ? memory["metadata"] : {}
+            confidence = metadata.fetch("confidence", 0.6).to_f
+            confidence = 0.0 if confidence.negative?
+            confidence = 1.0 if confidence > 1.0
+
+            type_score = preferred_types.include?(type) ? 1.0 : 0.25
+            agent_score = (memory["agent"] == agent || memory["agent"] == "WORKFLOW_ENGINE") ? 1.0 : 0.2
+            age_seconds = [now - memory.fetch("created_at", now).to_i, 0].max
+            recency_score = 1.0 / (1.0 + (age_seconds / 86_400.0))
+
+            pitfall_penalty = type == "pitfall" ? profile.fetch("pitfall_penalty", 0.0).to_f : 0.0
+            memory["rank_score"] = ((0.45 * type_score) + (0.3 * agent_score) + (0.2 * recency_score) + (0.05 * confidence) - pitfall_penalty).round(6)
+            memory
+          end
+          .sort_by { |memory| -memory["rank_score"] }
       end
 
       def load_episode(key)

@@ -110,4 +110,18 @@ RSpec.describe Agentf::Commands::Debugger do
       expect(suggestions).to include("timeout")
     end
   end
+
+  describe "#cluster_errors" do
+    it "groups errors by type" do
+      errors = [
+        "NoMethodError: undefined method 'a'",
+        "NoMethodError: undefined method 'b'",
+        "TypeError: wrong type"
+      ]
+
+      result = debugger.cluster_errors(errors)
+      expect(result["NoMethodError"]["count"]).to eq(2)
+      expect(result["TypeError"]["count"]).to eq(1)
+    end
+  end
 end

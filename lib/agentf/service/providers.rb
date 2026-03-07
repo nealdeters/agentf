@@ -59,12 +59,29 @@ module Agentf
                      response["files"] = files
                      response
                    when "TESTER"
-                     source_file = context["source_file"] || "app/models/application_record.rb"
-                     template = commands.fetch("tester").generate_unit_tests(source_file)
-                     response = agent.generate_tests(source_file)
-                     response["generated_code"] = template.test_code
-                     response
-                   when "DEBUGGER"
+                      source_file = context["source_file"] || "app/models/application_record.rb"
+                      tester_commands = commands.fetch("tester")
+                      tdd_phase = context["tdd_phase"] || "normal"
+
+                      if tdd_phase == "red"
+                        failure_signature = "expected-failure:#{File.basename(source_file)}:#{Time.now.to_i}"
+                        {
+                          "source_file" => source_file,
+                          "test_file" => source_file.sub(/\.rb$/, "_spec.rb"),
+                          "tdd_phase" => "red",
+                          "passed" => false,
+                          "failure_signature" => failure_signature,
+                          "stdout" => "Intentional TDD red failure captured"
+                        }
+                      else
+                        template = tester_commands.generate_unit_tests(source_file)
+                        response = agent.generate_tests(source_file)
+                        response["generated_code"] = template.test_code
+                        response["tdd_phase"] = tdd_phase
+                        response["failure_signature"] = context["tdd_failure_signature"]
+                        response
+                      end
+                    when "DEBUGGER"
                      error = context["error"] || "No error provided"
                      analysis = commands.fetch("debugger").parse_error(error)
                      response = agent.diagnose(error, context: context["error_context"])

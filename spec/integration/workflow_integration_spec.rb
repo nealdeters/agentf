@@ -31,6 +31,10 @@ RSpec.describe "Agent workflow integration" do
       }
     end
 
+    def get_agent_context(agent:, query_embedding: nil, task_type: nil, limit: 8)
+      get_relevant_context(agent: agent, query_embedding: query_embedding, task_type: task_type, limit: limit)
+    end
+
     def store_feature_intent(title:, description:, acceptance_criteria: [], non_goals: [], tags: [], agent: "WORKFLOW_ENGINE", related_task_id: nil)
       store_episode(
         type: "feature_intent",
@@ -104,6 +108,13 @@ RSpec.describe "Agent workflow integration" do
 
       expect(result["workflow_type"]).to eq("feature")
       expect(result["completed_agents"]).to eq(%w[ARCHITECT EXPLORER DESIGNER SPECIALIST TESTER SECURITY REVIEWER DOCUMENTER])
+      expect(result.dig("tdd", "enabled")).to be(true)
+      expect(result.dig("tdd", "red_executed")).to be(true)
+
+      red_phase = result["results"].find { |r| r["agent"] == "TESTER_TDD_RED" }
+      expect(red_phase).not_to be_nil
+      expect(red_phase.dig("result", "tdd_phase")).to eq("red")
+      expect(red_phase.dig("result", "passed")).to be(false)
 
       designers = memory.records.select { |mem| mem["agent"] == "DESIGNER" && mem["type"] == "success" }
       testers = memory.records.select { |mem| mem["agent"] == "TESTER" && mem["type"] == "success" }
@@ -139,6 +150,8 @@ RSpec.describe "Agent workflow integration" do
 
       expect(result["workflow_type"]).to eq("bugfix")
       expect(result["completed_agents"]).to eq(%w[ARCHITECT DEBUGGER SPECIALIST TESTER SECURITY REVIEWER])
+      expect(result.dig("tdd", "red_executed")).to be(true)
+      expect(result.dig("tdd", "green_executed")).to be(true)
 
       debugger_memories = memory.records.select { |mem| mem["agent"] == "DEBUGGER" && mem["type"] == "lesson" }
       expect(debugger_memories).not_to be_empty

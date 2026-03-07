@@ -95,5 +95,13 @@ RSpec.describe Agentf::Commands::Explorer do
       result = explorer.find_related_files("nonexistent.rb")
       expect(result).to have_key("error")
     end
+
+    it "includes imported_by and tests keys" do
+      result = explorer.find_related_files("app/models/user.rb")
+
+      expect(result).to have_key("imported_by")
+      expect(result).to have_key("tests")
+      expect(result).to have_key("similar")
+    end
   end
 end

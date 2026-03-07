@@ -96,6 +96,50 @@ RSpec.describe Agentf::Memory::RedisMemory do
     end
   end
 
+  describe "learning model APIs" do
+    it "stores and retrieves incidents" do
+      memory = described_class.new(project: project)
+      memory.store_incident(
+        title: "Payment timeout",
+        description: "Gateway timed out",
+        root_cause: "Downstream latency",
+        resolution: "Increase timeout",
+        tags: ["payments"]
+      )
+
+      incidents = memory.get_memories_by_type(type: "incident", limit: 10)
+      expect(incidents.map { |incident| incident["type"] }).to include("incident")
+    end
+
+    it "stores playbook memories" do
+      memory = described_class.new(project: project)
+      memory.store_playbook(
+        title: "Release rollout",
+        description: "Safe deployment steps",
+        steps: ["deploy canary", "monitor", "promote"],
+        tags: ["release"]
+      )
+
+      playbooks = memory.get_memories_by_type(type: "playbook", limit: 10)
+      expect(playbooks.map { |record| record["type"] }).to include("playbook")
+    end
+  end
+
+  describe "agent context ranking" do
+    it "prioritizes architect intent and playbook records" do
+      memory = described_class.new(project: project)
+      memory.store_feature_intent(title: "Feature intent", description: "Build reporting")
+      memory.store_playbook(title: "Architecture playbook", description: "Use modular boundaries")
+      memory.store_pitfall(title: "Old pitfall", description: "Legacy mistake")
+
+      context = memory.get_agent_context(agent: "ARCHITECT", task_type: "feature", limit: 2)
+
+      expect(context["memories"].length).to eq(2)
+      expect(context["profile"]).to have_key("preferred_types")
+      expect(context["memories"].first).to have_key("rank_score")
+    end
+  end
+
   describe "#find_similar_tasks" do
     it "returns empty array (not implemented)" do
       memory = described_class.new(project: project)

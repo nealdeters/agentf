@@ -116,6 +116,55 @@ module Agentf
           end
         end
 
+        # Discover files that reference the target file by basename or relative path fragment
+        target_stem = target.basename.sub_ext("").to_s
+        search_tokens = [target_stem, target_file.gsub(target.extname, "")].uniq
+        base.glob("**/*#{target.extname}").each do |file|
+          next if file == target
+          next unless file.file?
+
+          file_content = safe_read(file)
+          next if file_content.empty?
+
+          if search_tokens.any? { |token| file_content.include?(token) }
+            result["imported_by"] << file.relative_path_from(base).to_s
+          end
+        end
+
+        # Test companions by naming convention
+        target_dir = target.dirname.relative_path_from(base).to_s
+        target_name = target.basename.sub_ext("").to_s
+        test_patterns = [
+          "spec/**/*#{target_name}*_spec.rb",
+          "test/**/*#{target_name}*_test.rb",
+          "**/*#{target_name}.test.js",
+          "**/*#{target_name}.test.ts",
+          "**/*#{target_name}.spec.js",
+          "**/*#{target_name}.spec.ts"
+        ]
+
+        test_patterns.each do |pattern|
+          base.glob(pattern).each do |match|
+            rel = match.relative_path_from(base).to_s
+            result["tests"] << rel if rel.include?(target_name) || rel.include?(target_dir)
+          end
+        end
+
+        # Similar files in same directory by prefix
+        sibling_prefix = target_name.split("_").first
+        target.dirname.children.each do |child|
+          next unless child.file?
+          next if child == target
+
+          name = child.basename.sub_ext("").to_s
+          result["similar"] << child.relative_path_from(base).to_s if name.start_with?(sibling_prefix)
+        end
+
+        result["imports"].uniq!
+        result["imported_by"].uniq!
+        result["tests"].uniq!
+        result["similar"].uniq!
+
         result
       rescue StandardError => e
         { "error" => e.message }
@@ -147,6 +196,12 @@ module Agentf
         end
 
         tree
+      end
+
+      def safe_read(path)
+        path.read
+      rescue StandardError
+        ""
       end
     end
   end

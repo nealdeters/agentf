@@ -6,6 +6,7 @@ RSpec.describe Agentf::WorkflowEngine do
       "memory",
       get_recent_memories: [],
       get_pitfalls: [],
+      get_agent_context: {},
       store_episode: nil,
       store_success: nil,
       store_pitfall: nil,

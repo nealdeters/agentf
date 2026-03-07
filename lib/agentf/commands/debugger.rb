@@ -14,7 +14,8 @@ module Agentf
           "commands" => [
             { "name" => "parse_error", "type" => "function" },
             { "name" => "analyze_logs", "type" => "function" },
-            { "name" => "suggest_fix", "type" => "function" }
+            { "name" => "suggest_fix", "type" => "function" },
+            { "name" => "cluster_errors", "type" => "function" }
           ]
         }
       end
@@ -170,7 +171,23 @@ module Agentf
 
         suggestions << "Review code at #{analysis.location}" if source_code && analysis.location != "unknown"
 
+        historical = historical_fix_hints(analysis)
+        suggestions.concat(historical) unless historical.empty?
+
         suggestions.map { |s| "- #{s}" }.join("\n")
+      end
+
+      def cluster_errors(errors)
+        clusters = Hash.new { |h, k| h[k] = { "count" => 0, "examples" => [] } }
+
+        Array(errors).each do |error_text|
+          analysis = parse_error(error_text.to_s)
+          key = analysis.error_type
+          clusters[key]["count"] += 1
+          clusters[key]["examples"] << analysis.message if clusters[key]["examples"].length < 3
+        end
+
+        clusters
       end
 
       private
@@ -194,6 +211,27 @@ module Agentf
         end
 
         frames
+      end
+
+      def historical_fix_hints(analysis)
+        memory = Agentf::Memory::RedisMemory.new(project: Agentf.config.project_name)
+        incidents = memory.get_memories_by_type(type: "incident", limit: 25)
+        return [] if incidents.empty?
+
+        matched = incidents.select do |incident|
+          haystack = [incident["title"], incident["description"], incident["context"]].compact.join(" ").downcase
+          haystack.include?(analysis.error_type.downcase)
+        end
+
+        return [] if matched.empty?
+
+        matched.first(2).map do |incident|
+          "Try prior incident fix: #{incident['title']}"
+        end
+      rescue StandardError
+        []
+      ensure
+        memory&.close
       end
     end
   end

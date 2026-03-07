@@ -43,6 +43,24 @@ RSpec.describe Agentf::Service::Providers::OpenCode do
 
       expect(result["error"]).to eq("Agent UNKNOWN not found")
     end
+
+    it "supports tester red phase in TDD mode" do
+      tester = instance_double(Agentf::Agents::Tester)
+      tester_commands = instance_double(Agentf::Commands::Tester)
+      allow(tester_commands).to receive(:generate_unit_tests)
+
+      result = provider.execute_agent(
+        agent_name: "TESTER",
+        task: "Fix auth",
+        context: { "source_file" => "app/models/user.rb", "tdd_phase" => "red" },
+        agents: { "TESTER" => tester },
+        commands: { "tester" => tester_commands }
+      )
+
+      expect(result["tdd_phase"]).to eq("red")
+      expect(result["passed"]).to be(false)
+      expect(result["failure_signature"]).to include("expected-failure")
+    end
   end
 end
 

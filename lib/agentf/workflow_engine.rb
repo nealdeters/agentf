@@ -2,6 +2,7 @@
 
 require_relative "agents"
 require_relative "commands"
+require_relative "context_builder"
 
 module Agentf
   class WorkflowEngine
@@ -24,6 +25,7 @@ module Agentf
       @designer_commands = Commands::Designer.new(base_path: @base_path)
       @security_commands = Commands::SecurityScanner.new
       @metrics_commands = Agentf.config.metrics_enabled ? Commands::Metrics.new(memory: @memory) : nil
+      @context_builder = ContextBuilder.new(memory: @memory)
 
       @agents = {
         "ARCHITECT" => Agents::Architect.new(@memory),
@@ -52,6 +54,7 @@ module Agentf
         "provider" => plan["provider"],
         "workflow_type" => plan["workflow_type"],
         "context" => context || {},
+        "tdd" => initialize_tdd_state(plan["workflow_type"]),
         "results" => [],
         "completed_agents" => []
       }
@@ -60,6 +63,7 @@ module Agentf
       persist_feature_intent(task: task, workflow_type: plan["workflow_type"], context: @workflow_state["context"])
 
       plan["agents_needed"].each do |agent_name|
+        run_pre_specialist_tdd_cycle if agent_name == "SPECIALIST"
         agent_result = execute_agent(agent_name)
         @workflow_state["results"] << { "agent" => agent_name, "result" => agent_result }
         @workflow_state["completed_agents"] << agent_name
@@ -98,12 +102,22 @@ module Agentf
     def execute_agent(agent_name)
       context = @workflow_state["context"]
       enriched_context = context.merge(
-        "brain" => @memory.get_relevant_context(
+        "brain" => @context_builder.build(
           agent: agent_name,
-          task_type: @workflow_state["workflow_type"],
+          workflow_state: @workflow_state,
           limit: 8
         )
       )
+
+      if agent_name == "TESTER"
+        enriched_context["tdd_phase"] = @workflow_state.dig("tdd", "phase")
+        enriched_context["tdd_failure_signature"] = @workflow_state.dig("tdd", "failure_signature")
+      end
+
+      if agent_name == "SPECIALIST"
+        enriched_context["tdd_phase"] = "green"
+        enriched_context["expected_test_fix"] = @workflow_state.dig("tdd", "failure_signature")
+      end
 
       result = @provider.execute_agent(
         agent_name: agent_name,
@@ -115,6 +129,7 @@ module Agentf
       )
 
       persist_agent_learning(agent_name: agent_name, result: result)
+      transition_tdd_phase(agent_name: agent_name, result: result)
       result
     end
 
@@ -129,9 +144,9 @@ module Agentf
     end
 
     def attach_initial_brain_context
-      @workflow_state["context"]["brain"] = @memory.get_relevant_context(
+      @workflow_state["context"]["brain"] = @context_builder.build(
         agent: @name,
-        task_type: @workflow_state["workflow_type"],
+        workflow_state: @workflow_state,
         limit: 8
       )
     rescue StandardError
@@ -170,6 +185,30 @@ module Agentf
         return
       end
 
+      if agent_name == "TESTER" && result["tdd_phase"] == "red" && result["passed"] == false
+        @memory.store_pitfall(
+          title: "TDD red phase captured",
+          description: result["failure_signature"] || "Intentional failing test captured",
+          context: @workflow_state["task"],
+          tags: [@workflow_state["workflow_type"], "tdd_red"],
+          agent: agent_name,
+          code_snippet: ""
+        )
+        return
+      end
+
+      if agent_name == "TESTER" && result["tdd_phase"] == "green" && result["passed"] == true
+        @memory.store_success(
+          title: "TDD green phase passed",
+          description: "Resolved failing test signature: #{result['failure_signature']}",
+          context: @workflow_state["task"],
+          tags: [@workflow_state["workflow_type"], "tdd_green"],
+          agent: agent_name,
+          code_snippet: ""
+        )
+        return
+      end
+
       @memory.store_lesson(
         title: "#{agent_name} completed workflow step",
         description: "Agent step completed for #{@workflow_state['workflow_type']} workflow",
@@ -192,8 +231,62 @@ module Agentf
         "status" => errors.any? ? "failed" : (approved ? "approved" : "completed"),
         "total_agents" => results.size,
         "errors" => errors.size,
-        "approved" => approved
+        "approved" => approved,
+        "tdd" => @workflow_state["tdd"]
       }
+    end
+
+    def initialize_tdd_state(workflow_type)
+      enabled = %w[feature bugfix refactor].include?(workflow_type)
+      {
+        "enabled" => enabled,
+        "phase" => enabled ? "red" : "disabled",
+        "failure_signature" => nil,
+        "red_executed" => false,
+        "green_executed" => false
+      }
+    end
+
+    def run_pre_specialist_tdd_cycle
+      tdd = @workflow_state["tdd"]
+      return unless tdd["enabled"]
+      return if tdd["red_executed"]
+
+      red_context = @workflow_state["context"].merge(
+        "tdd_phase" => "red",
+        "brain" => @context_builder.build(agent: "TESTER", workflow_state: @workflow_state, limit: 8)
+      )
+
+      red_result = @provider.execute_agent(
+        agent_name: "TESTER",
+        task: @workflow_state["task"],
+        context: red_context,
+        agents: @agents,
+        commands: command_registry,
+        logger: method(:log)
+      )
+
+      tdd["red_executed"] = true
+      tdd["failure_signature"] = red_result["failure_signature"]
+      @workflow_state["results"] << { "agent" => "TESTER_TDD_RED", "result" => red_result }
+      persist_agent_learning(agent_name: "TESTER", result: red_result)
+    rescue StandardError => e
+      log "TDD red phase skipped: #{e.message}"
+    end
+
+    def transition_tdd_phase(agent_name:, result:)
+      tdd = @workflow_state["tdd"]
+      return unless tdd["enabled"]
+
+      if agent_name == "SPECIALIST"
+        tdd["phase"] = "green"
+      elsif agent_name == "TESTER" && tdd["phase"] == "green"
+        tdd["green_executed"] = true
+      end
+
+      return unless agent_name == "TESTER" && result["tdd_phase"] == "green"
+
+      tdd["failure_signature"] ||= result["failure_signature"]
     end
 
     def record_workflow_metrics
