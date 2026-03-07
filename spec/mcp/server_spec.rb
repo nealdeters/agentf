@@ -1,0 +1,338 @@
+# frozen_string_literal: true
+
+require "spec_helper"
+require "agentf/mcp/server"
+require "json"
+
+RSpec.describe Agentf::MCP::Server do
+  let(:explorer) { instance_double(Agentf::Commands::Explorer) }
+  let(:reviewer) { instance_double(Agentf::Commands::MemoryReviewer) }
+  let(:memory) { instance_double(Agentf::Memory::RedisMemory) }
+
+  let(:env) { {} }
+
+  subject(:mcp) do
+    described_class.new(explorer: explorer, reviewer: reviewer, memory: memory, env: env)
+  end
+
+  # ── Tool registration ───────────────────────────────────────────
+
+  describe "tool registration" do
+    it "registers all 9 tools" do
+      tools = mcp.server.list_tools
+      names = tools.map { |t| t[:name] }
+
+      expect(names).to contain_exactly(
+        "code_glob", "code_grep", "code_tree", "code_related_files",
+        "memory_recent", "memory_search",
+        "memory_add_lesson", "memory_add_success", "memory_add_pitfall"
+      )
+    end
+
+    it "includes descriptions for all tools" do
+      tools = mcp.server.list_tools
+      tools.each do |t|
+        expect(t[:description]).to be_a(String)
+        expect(t[:description]).not_to be_empty, "Tool #{t[:name]} missing description"
+      end
+    end
+
+    it "includes input schemas for all tools" do
+      tools = mcp.server.list_tools
+      tools.each do |t|
+        expect(t[:inputSchema]).to be_a(Hash), "Tool #{t[:name]} missing inputSchema"
+      end
+    end
+  end
+
+  # ── Guardrails ──────────────────────────────────────────────────
+
+  describe "guardrails" do
+    describe "allowed tools" do
+      it "allows all tools by default" do
+        expect(mcp.guardrails[:allowed_tools]).to eq(Set.new(described_class::KNOWN_TOOLS))
+      end
+
+      it "allows all tools when set to *" do
+        server = described_class.new(
+          explorer: explorer, reviewer: reviewer, memory: memory,
+          env: { "AGENTF_MCP_ALLOWED_TOOLS" => "*" }
+        )
+        expect(server.guardrails[:allowed_tools]).to eq(Set.new(described_class::KNOWN_TOOLS))
+      end
+
+      it "restricts to specified tools" do
+        server = described_class.new(
+          explorer: explorer, reviewer: reviewer, memory: memory,
+          env: { "AGENTF_MCP_ALLOWED_TOOLS" => "code_glob,memory_recent" }
+        )
+        expect(server.guardrails[:allowed_tools]).to eq(Set.new(%w[code_glob memory_recent]))
+      end
+
+      it "raises on unknown tools" do
+        expect do
+          described_class.new(
+            explorer: explorer, reviewer: reviewer, memory: memory,
+            env: { "AGENTF_MCP_ALLOWED_TOOLS" => "code_glob,unknown_tool" }
+          )
+        end.to raise_error(ArgumentError, /Unknown tool/)
+      end
+
+      it "blocks tools outside allowlist" do
+        server = described_class.new(
+          explorer: explorer, reviewer: reviewer, memory: memory,
+          env: { "AGENTF_MCP_ALLOWED_TOOLS" => "code_glob" }
+        )
+
+        result = server.server.call_tool("memory_recent")
+        expect(result).to include("Tool not allowed: memory_recent")
+      end
+    end
+
+    describe "write toggle" do
+      it "allows writes by default" do
+        expect(mcp.guardrails[:allow_writes]).to be true
+      end
+
+      it "disables writes when set to false" do
+        server = described_class.new(
+          explorer: explorer, reviewer: reviewer, memory: memory,
+          env: { "AGENTF_MCP_ALLOW_WRITES" => "false" }
+        )
+        expect(server.guardrails[:allow_writes]).to be false
+      end
+
+      it "blocks write tools when writes disabled" do
+        server = described_class.new(
+          explorer: explorer, reviewer: reviewer, memory: memory,
+          env: { "AGENTF_MCP_ALLOW_WRITES" => "false" }
+        )
+
+        result = server.server.call_tool("memory_add_lesson", title: "T", description: "D")
+        expect(result).to include("Write tools are disabled")
+      end
+
+      it "does not block read tools when writes disabled" do
+        server = described_class.new(
+          explorer: explorer, reviewer: reviewer, memory: memory,
+          env: { "AGENTF_MCP_ALLOW_WRITES" => "false" }
+        )
+
+        allow(reviewer).to receive(:get_recent_memories).with(limit: 10).and_return(
+          "count" => 0, "memories" => []
+        )
+
+        result = server.server.call_tool("memory_recent")
+        payload = JSON.parse(result)
+        expect(payload["count"]).to eq(0)
+      end
+    end
+
+    describe "max arg length" do
+      it "defaults to 4096" do
+        expect(mcp.guardrails[:max_arg_length]).to eq(4096)
+      end
+
+      it "enforces max arg length" do
+        server = described_class.new(
+          explorer: explorer, reviewer: reviewer, memory: memory,
+          env: { "AGENTF_MCP_MAX_ARG_LENGTH" => "10" }
+        )
+
+        result = server.server.call_tool("code_glob", pattern: "a" * 11)
+        expect(result).to include("exceeds max length")
+      end
+    end
+  end
+
+  # ── Code tools ──────────────────────────────────────────────────
+
+  describe "code_glob" do
+    it "calls explorer.glob and returns JSON" do
+      allow(explorer).to receive(:glob).with("lib/**/*.rb", file_types: nil)
+        .and_return(["lib/agentf.rb", "lib/agentf/memory.rb"])
+
+      result = mcp.server.call_tool("code_glob", pattern: "lib/**/*.rb")
+      payload = JSON.parse(result)
+
+      expect(payload["pattern"]).to eq("lib/**/*.rb")
+      expect(payload["matches"]).to eq(["lib/agentf.rb", "lib/agentf/memory.rb"])
+      expect(payload["count"]).to eq(2)
+    end
+
+    it "passes file types when provided" do
+      allow(explorer).to receive(:glob).with("**/*", file_types: ["rb", "py"])
+        .and_return(["a.rb"])
+
+      result = mcp.server.call_tool("code_glob", pattern: "**/*", types: ["rb", "py"])
+      payload = JSON.parse(result)
+      expect(payload["count"]).to eq(1)
+    end
+  end
+
+  describe "code_grep" do
+    it "calls explorer.grep and returns JSON" do
+      match = { "path" => "lib/a.rb", "line_number" => 5, "content" => "class Foo" }
+      allow(explorer).to receive(:grep).with("Foo", file_pattern: "*.rb", context_lines: 2)
+        .and_return([match])
+
+      result = mcp.server.call_tool("code_grep", pattern: "Foo", file_pattern: "*.rb")
+      payload = JSON.parse(result)
+
+      expect(payload["pattern"]).to eq("Foo")
+      expect(payload["count"]).to eq(1)
+      expect(payload["matches"].first["path"]).to eq("lib/a.rb")
+    end
+  end
+
+  describe "code_tree" do
+    it "calls explorer.get_file_tree and returns JSON" do
+      tree = { "lib" => { "agentf.rb" => nil } }
+      allow(explorer).to receive(:get_file_tree).with(max_depth: 3).and_return(tree)
+
+      result = mcp.server.call_tool("code_tree")
+      payload = JSON.parse(result)
+
+      expect(payload["max_depth"]).to eq(3)
+      expect(payload["tree"]).to eq({ "lib" => { "agentf.rb" => nil } })
+    end
+
+    it "accepts custom depth" do
+      allow(explorer).to receive(:get_file_tree).with(max_depth: 5).and_return({})
+
+      result = mcp.server.call_tool("code_tree", depth: 5)
+      payload = JSON.parse(result)
+      expect(payload["max_depth"]).to eq(5)
+    end
+  end
+
+  describe "code_related_files" do
+    it "calls explorer.find_related_files and returns JSON" do
+      related = { "imports" => ["lib/b.rb"], "tests" => ["spec/a_spec.rb"] }
+      allow(explorer).to receive(:find_related_files).with("lib/a.rb").and_return(related)
+
+      result = mcp.server.call_tool("code_related_files", target_file: "lib/a.rb")
+      payload = JSON.parse(result)
+
+      expect(payload["target_file"]).to eq("lib/a.rb")
+      expect(payload["related"]["imports"]).to eq(["lib/b.rb"])
+    end
+  end
+
+  # ── Memory tools ────────────────────────────────────────────────
+
+  describe "memory_recent" do
+    it "calls reviewer.get_recent_memories with default limit" do
+      allow(reviewer).to receive(:get_recent_memories).with(limit: 10).and_return(
+        "count" => 1, "memories" => [{ "title" => "Test" }]
+      )
+
+      result = mcp.server.call_tool("memory_recent")
+      payload = JSON.parse(result)
+
+      expect(payload["count"]).to eq(1)
+      expect(payload["memories"].first["title"]).to eq("Test")
+    end
+
+    it "passes custom limit" do
+      allow(reviewer).to receive(:get_recent_memories).with(limit: 5).and_return(
+        "count" => 0, "memories" => []
+      )
+
+      result = mcp.server.call_tool("memory_recent", limit: 5)
+      payload = JSON.parse(result)
+      expect(payload["count"]).to eq(0)
+    end
+  end
+
+  describe "memory_search" do
+    it "calls reviewer.search with query and limit" do
+      allow(reviewer).to receive(:search).with("react", limit: 10).and_return(
+        "count" => 2, "memories" => [{ "title" => "React lesson" }, { "title" => "React hooks" }]
+      )
+
+      result = mcp.server.call_tool("memory_search", query: "react")
+      payload = JSON.parse(result)
+
+      expect(payload["count"]).to eq(2)
+    end
+  end
+
+  describe "memory_add_lesson" do
+    it "stores a lesson via memory.store_episode" do
+      allow(memory).to receive(:store_episode).with(
+        type: "lesson",
+        title: "New learning",
+        description: "Discovered pattern",
+        agent: "ARCHITECT",
+        tags: ["arch"],
+        context: "planning",
+        code_snippet: ""
+      ).and_return("episode_123")
+
+      result = mcp.server.call_tool(
+        "memory_add_lesson",
+        title: "New learning",
+        description: "Discovered pattern",
+        agent: "ARCHITECT",
+        tags: ["arch"],
+        context: "planning"
+      )
+      payload = JSON.parse(result)
+
+      expect(payload["id"]).to eq("episode_123")
+      expect(payload["type"]).to eq("lesson")
+      expect(payload["status"]).to eq("stored")
+    end
+  end
+
+  describe "memory_add_success" do
+    it "stores a success via memory.store_episode" do
+      allow(memory).to receive(:store_episode).with(
+        type: "success",
+        title: "It worked",
+        description: "Deployed clean",
+        agent: "SPECIALIST",
+        tags: [],
+        context: "",
+        code_snippet: ""
+      ).and_return("episode_456")
+
+      result = mcp.server.call_tool(
+        "memory_add_success",
+        title: "It worked",
+        description: "Deployed clean"
+      )
+      payload = JSON.parse(result)
+
+      expect(payload["id"]).to eq("episode_456")
+      expect(payload["type"]).to eq("success")
+    end
+  end
+
+  describe "memory_add_pitfall" do
+    it "stores a pitfall via memory.store_episode" do
+      allow(memory).to receive(:store_episode).with(
+        type: "pitfall",
+        title: "Bad deploy",
+        description: "Missing env var",
+        agent: "DEBUGGER",
+        tags: ["deploy"],
+        context: "",
+        code_snippet: ""
+      ).and_return("episode_789")
+
+      result = mcp.server.call_tool(
+        "memory_add_pitfall",
+        title: "Bad deploy",
+        description: "Missing env var",
+        agent: "DEBUGGER",
+        tags: ["deploy"]
+      )
+      payload = JSON.parse(result)
+
+      expect(payload["id"]).to eq("episode_789")
+      expect(payload["type"]).to eq("pitfall")
+    end
+  end
+end

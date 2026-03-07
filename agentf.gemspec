@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
+require_relative "lib/agentf/version"
+
 Gem::Specification.new do |spec|
   spec.name          = "agentf"
-  spec.version       = "0.1.0"
+  spec.version       = Agentf::VERSION
   spec.authors       = ["Neal Deters"]
   spec.summary       = "A self-learning swarm of agents with shared memory"
   spec.description   = <<-DESC
@@ -12,7 +14,7 @@ Gem::Specification.new do |spec|
   DESC
   spec.homepage      = "https://github.com/nealdeters/agentf"
   spec.license       = "MIT"
-  spec.required_ruby_version = ">= 3.0"
+  spec.required_ruby_version = ">= 3.3.0"
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/nealdeters/agentf"
@@ -21,10 +23,11 @@ Gem::Specification.new do |spec|
   spec.files         = Dir.glob("lib/**/*.rb") + Dir.glob("bin/*")
   spec.require_paths = ["lib"]
 
-  spec.executables   = ["agentf-memory"]
+  spec.executables   = ["agentf"]
 
   spec.add_runtime_dependency "redis", "~> 4.8"
   spec.add_runtime_dependency "dotenv", "~> 2.8"
+  spec.add_runtime_dependency "mcp-rb", "~> 0.3"
 
   spec.add_development_dependency "rspec", "~> 3.12"
   spec.add_development_dependency "fakeredis", ">= 0.9.0"

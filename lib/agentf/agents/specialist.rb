@@ -29,8 +29,7 @@ module Agentf
       def execute(subtask)
         log "Executing: #{subtask['description']}"
 
-        # Simulate work
-        success = true
+        success = subtask.fetch("success", true)
 
         if success
           memory.store_success(

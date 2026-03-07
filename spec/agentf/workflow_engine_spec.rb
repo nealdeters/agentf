@@ -35,6 +35,14 @@ RSpec.describe Agentf::WorkflowEngine do
   end
 
   describe "#execute" do
+    around do |example|
+      original = Agentf.config.metrics_enabled
+      Agentf.config.metrics_enabled = true
+      example.run
+    ensure
+      Agentf.config.metrics_enabled = original
+    end
+
     it "runs workflow and captures feature intent" do
       engine = described_class.new(memory: memory, base_path: base_path, provider: :opencode)
 
@@ -52,6 +60,22 @@ RSpec.describe Agentf::WorkflowEngine do
 
       result = engine.execute("Create button", context: context)
       expect(result["context"]).to eq(context)
+    end
+
+    it "records workflow metrics via commands metrics recorder" do
+      engine = described_class.new(memory: memory, base_path: base_path, provider: :opencode)
+      metrics_commands = instance_double(Agentf::Commands::Metrics, record_workflow: { "status" => "recorded" })
+      engine.instance_variable_set(:@metrics_commands, metrics_commands)
+
+      expect(metrics_commands).to receive(:record_workflow).with(hash_including("provider" => "OPENCODE"))
+      engine.execute("Add feature")
+    end
+
+    it "does not initialize metrics command when metrics are disabled" do
+      Agentf.config.metrics_enabled = false
+      engine = described_class.new(memory: memory, base_path: base_path, provider: :opencode)
+
+      expect(engine.instance_variable_get(:@metrics_commands)).to be_nil
     end
   end
 end

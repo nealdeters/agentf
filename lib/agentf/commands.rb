@@ -1,18 +1,13 @@
 # frozen_string_literal: true
 
-# Load data classes
-require_relative "tools/file_match"
-require_relative "tools/test_template"
-require_relative "tools/error_analysis"
-require_relative "tools/component_spec"
-
 # Load command implementations
-require_relative "tools/explorer"
-require_relative "tools/tester"
-require_relative "tools/debugger"
-require_relative "tools/designer"
-require_relative "tools/security_scanner"
-require_relative "tools/memory_reviewer"
+require_relative "commands/explorer"
+require_relative "commands/tester"
+require_relative "commands/debugger"
+require_relative "commands/designer"
+require_relative "commands/security_scanner"
+require_relative "commands/memory_reviewer"
+require_relative "commands/metrics"
 
 module Agentf
   module Commands

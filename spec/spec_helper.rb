@@ -28,4 +28,9 @@ RSpec.configure do |config|
   config.example_status_persistence_file_path = "spec/examples.txt"
   config.disable_monkey_patching!
   config.warnings = false
+
+  # Clear fakeredis between tests to prevent state leakage
+  config.before(:each) do
+    Redis.new(url: "redis://localhost:6379").flushall
+  end
 end

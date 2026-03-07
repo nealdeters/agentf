@@ -24,6 +24,18 @@ RSpec.describe Agentf::Memory::RedisMemory do
       memory = described_class.new(project: project)
       expect(memory).to respond_to(:store_task)
     end
+
+    it "serializes embedding as JSON, not Ruby Array#to_s" do
+      memory = described_class.new(project: project)
+      task_id = memory.store_task(content: "Test", embedding: [1.0, 2.0, 3.0])
+
+      # Retrieve the stored task via find_similar_tasks
+      # The embedding round-trips through JSON.generate -> hset -> hget -> JSON.parse
+      results = memory.find_similar_tasks(query_embedding: [1.0, 2.0, 3.0], limit: 1)
+      expect(results.length).to eq(1)
+      expect(results.first["id"]).to eq(task_id)
+      expect(results.first["score"]).to be_within(0.001).of(1.0)
+    end
   end
 
   describe "#store_episode" do

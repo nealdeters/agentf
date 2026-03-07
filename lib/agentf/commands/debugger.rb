@@ -83,23 +83,23 @@ module Agentf
         location = "unknown"
 
         # Try Ruby pattern
-        if (match = error_text.match(/(?<type>\w+(?:Error|Exception)):\s*(?<message>.+?)(?:\n|\s+from\s+(?<file>[^:]+):(?<line>\d+))?/m))
+        if (match = error_text.match(/(?<type>\w+(?:Error|Exception)):\s*(?<message>[^\n]+?)(?:\s+from\s+(?<file>[^:]+):(?<line>\d+))?$/m))
           error_type = match[:type]
-          message = match[:message]
+          message = match[:message].strip
           location = "#{match[:file]}:#{match[:line]}" if match[:file]
         end
 
         # Try Python pattern
-        if error_type == "Unknown" && (match = error_text.match(/(\w+Error):\s*(.+?)(?:\n|\s+File\s+"([^"]+)",\s+line\s+(\d+))?/m))
+        if error_type == "Unknown" && (match = error_text.match(/(\w+Error):\s*([^\n]+?)(?:\s+File\s+"([^"]+)",\s+line\s+(\d+))?$/m))
           error_type = match[1]
-          message = match[2]
+          message = match[2].strip
           location = "#{match[3]}:#{match[4]}" if match[3]
         end
 
         # Try JS pattern
-        if error_type == "Unknown" && (match = error_text.match(/(\w+Error):\s*(.+?)(?:\n|\s+at\s+.+?\s+\((.+?):(\d+):(\d+)\))?/m))
+        if error_type == "Unknown" && (match = error_text.match(/(\w+Error):\s*([^\n]+?)(?:\s+at\s+.+?\s+\((.+?):(\d+):(\d+)\))?$/m))
           error_type = match[1]
-          message = match[2]
+          message = match[2].strip
           location = "#{match[3]}:#{match[4]}" if match[3]
         end
 
@@ -110,7 +110,7 @@ module Agentf
 
         stack_trace = parse_stack_trace(error_text)
 
-        ErrorAnalysis.new(
+        Agentf::Tools::ErrorAnalysis.new(
           error_type: error_type,
           message: message[0..199],
           location: location,
@@ -165,7 +165,7 @@ module Agentf
 
         msg_lower = analysis.message.downcase
         suggestions << "Check for nil values before use" if msg_lower.include?("nil") || msg_lower.include?("none")
-        suggestions << "Verify variable is defined before access" if msg_lower.include?("undefined") || msg_lower.include?("undefined")
+        suggestions << "Verify variable is defined before access" if msg_lower.include?("undefined") || msg_lower.include?("not defined")
         suggestions << "Consider increasing timeout or checking service availability" if msg_lower.include?("timeout")
 
         suggestions << "Review code at #{analysis.location}" if source_code && analysis.location != "unknown"

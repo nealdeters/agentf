@@ -23,6 +23,7 @@ module Agentf
       @debugger_commands = Commands::Debugger.new(base_path: @base_path)
       @designer_commands = Commands::Designer.new(base_path: @base_path)
       @security_commands = Commands::SecurityScanner.new
+      @metrics_commands = Agentf.config.metrics_enabled ? Commands::Metrics.new(memory: @memory) : nil
 
       @agents = {
         "ARCHITECT" => Agents::Architect.new(@memory),
@@ -65,6 +66,7 @@ module Agentf
       end
 
       summary = summarize_workflow
+      record_workflow_metrics
 
       log ""
       log "=" * 60
@@ -192,6 +194,17 @@ module Agentf
         "errors" => errors.size,
         "approved" => approved
       }
+    end
+
+    def record_workflow_metrics
+      return unless @metrics_commands
+
+      result = @metrics_commands.record_workflow(@workflow_state)
+      return if result["status"] == "recorded"
+
+      log "Metrics capture skipped: #{result['error']}"
+    rescue StandardError => e
+      log "Metrics capture skipped: #{e.message}"
     end
   end
 end

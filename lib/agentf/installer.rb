@@ -8,7 +8,15 @@ module Agentf
     READ_ACTIONS = {
       "get_recent_memories" => "agentf memory recent -n 10",
       "get_pitfalls" => "agentf memory pitfalls -n 10",
-      "get_intents" => "agentf memory intents"
+      "get_lessons" => "agentf memory lessons -n 10",
+      "get_successes" => "agentf memory successes -n 10",
+      "get_intents" => "agentf memory intents",
+      "get_all_tags" => "agentf memory tags",
+      "get_by_tag" => "agentf memory by-tag <tag> -n 10",
+      "get_by_type" => "agentf memory by-type <type> -n 10",
+      "get_by_agent" => "agentf memory by-agent <agent> -n 10",
+      "search" => "agentf memory search \"<query>\" -n 10",
+      "get_summary" => "agentf memory summary"
     }.freeze
 
     WRITE_ACTIONS = {
@@ -186,7 +194,8 @@ module Agentf
         actions << "- Write: `#{WRITE_ACTIONS[write_action]}`"
       end
 
-      actions << "- Write: `agentf memory add-lesson \"<title>\" \"<description>\" --agent=#{klass.typed_name}`" if actions.empty?
+      actions << "- Read: `agentf memory recent -n 10`" if actions.none? { |a| a.start_with?("- Read:") }
+      actions << "- Write: `agentf memory add-lesson \"<title>\" \"<description>\" --agent=#{klass.typed_name}`" if actions.none? { |a| a.start_with?("- Write:") }
       actions
     end
 
@@ -220,7 +229,7 @@ module Agentf
         - Memory read tools: `memory_recent`, `memory_search`
         - Memory write tools (if enabled): `memory_add_lesson`, `memory_add_success`, `memory_add_pitfall`
 
-        MCP server is configured from `mcp-server/` and runs locally over stdio.
+        MCP server is started via `agentf mcp-server` and runs locally over stdio.
       MARKDOWN
     end
 
@@ -289,10 +298,10 @@ module Agentf
 
         const execFileAsync = promisify(execFile);
 
-        async function runRubyCli(directory: string, commandPath: string, args: string[]) {
+        async function runAgentfCli(directory: string, subcommand: string, command: string, args: string[]) {
           const projectRoot = path.resolve(directory);
-          const fullPath = path.join(projectRoot, commandPath);
-          const commandArgs = ["exec", "ruby", fullPath, ...args, "--json"];
+          const fullPath = path.join(projectRoot, "bin/agentf");
+          const commandArgs = ["exec", "ruby", fullPath, subcommand, command, ...args, "--json"];
 
           const { stdout } = await execFileAsync("bundle", commandArgs, {
             cwd: projectRoot,
@@ -314,12 +323,12 @@ module Agentf
                   types: tool.schema.array(tool.schema.string()).optional().describe("Optional file extensions"),
                 },
                 async execute(args, context) {
-                  const commandArgs = ["glob", args.pattern];
+                  const commandArgs = [];
                   if (args.types?.length) {
                     commandArgs.push(`--types=${args.types.join(",")}`);
                   }
 
-                  return runRubyCli(context.directory, "bin/agentf-code", commandArgs);
+                  return runAgentfCli(context.directory, "code", "glob", [args.pattern, ...commandArgs]);
                 },
               }),
               code_grep: tool({
@@ -330,11 +339,11 @@ module Agentf
                   context: tool.schema.number().int().min(0).max(20).optional().describe("Context lines"),
                 },
                 async execute(args, context) {
-                  const commandArgs = ["grep", args.pattern];
+                  const commandArgs = [];
                   if (args.filePattern) commandArgs.push(`--file-pattern=${args.filePattern}`);
                   if (Number.isInteger(args.context)) commandArgs.push(`--context=${args.context}`);
 
-                  return runRubyCli(context.directory, "bin/agentf-code", commandArgs);
+                  return runAgentfCli(context.directory, "code", "grep", [args.pattern, ...commandArgs]);
                 },
               }),
               code_tree: tool({
@@ -344,7 +353,7 @@ module Agentf
                 },
                 async execute(args, context) {
                   const depth = args.depth ?? 3;
-                  return runRubyCli(context.directory, "bin/agentf-code", ["tree", `--depth=${depth}`]);
+                  return runAgentfCli(context.directory, "code", "tree", [`--depth=${depth}`]);
                 },
               }),
               code_related_files: tool({
@@ -353,7 +362,7 @@ module Agentf
                   targetFile: tool.schema.string().describe("Workspace-relative file path"),
                 },
                 async execute(args, context) {
-                  return runRubyCli(context.directory, "bin/agentf-code", ["related", args.targetFile]);
+                  return runAgentfCli(context.directory, "code", "related", [args.targetFile]);
                 },
               }),
               memory_recent: tool({
@@ -363,7 +372,7 @@ module Agentf
                 },
                 async execute(args, context) {
                   const limit = args.limit ?? 10;
-                  return runRubyCli(context.directory, "bin/agentf-memory", ["recent", "-n", String(limit)]);
+                  return runAgentfCli(context.directory, "memory", "recent", ["-n", String(limit)]);
                 },
               }),
               memory_search: tool({
@@ -374,7 +383,7 @@ module Agentf
                 },
                 async execute(args, context) {
                   const limit = args.limit ?? 10;
-                  return runRubyCli(context.directory, "bin/agentf-memory", ["search", args.query, "-n", String(limit)]);
+                  return runAgentfCli(context.directory, "memory", "search", [args.query, "-n", String(limit)]);
                 },
               }),
               memory_add_lesson: tool({
@@ -387,12 +396,12 @@ module Agentf
                   context: tool.schema.string().optional(),
                 },
                 async execute(args, context) {
-                  const commandArgs = ["add-lesson", args.title, args.description];
+                  const commandArgs = [args.title, args.description];
                   if (args.agent) commandArgs.push(`--agent=${args.agent}`);
                   if (args.tags?.length) commandArgs.push(`--tags=${args.tags.join(",")}`);
                   if (args.context) commandArgs.push(`--context=${args.context}`);
 
-                  return runRubyCli(context.directory, "bin/agentf-memory", commandArgs);
+                  return runAgentfCli(context.directory, "memory", "add-lesson", commandArgs);
                 },
               }),
               memory_add_success: tool({
@@ -405,12 +414,12 @@ module Agentf
                   context: tool.schema.string().optional(),
                 },
                 async execute(args, context) {
-                  const commandArgs = ["add-success", args.title, args.description];
+                  const commandArgs = [args.title, args.description];
                   if (args.agent) commandArgs.push(`--agent=${args.agent}`);
                   if (args.tags?.length) commandArgs.push(`--tags=${args.tags.join(",")}`);
                   if (args.context) commandArgs.push(`--context=${args.context}`);
 
-                  return runRubyCli(context.directory, "bin/agentf-memory", commandArgs);
+                  return runAgentfCli(context.directory, "memory", "add-success", commandArgs);
                 },
               }),
               memory_add_pitfall: tool({
@@ -423,12 +432,12 @@ module Agentf
                   context: tool.schema.string().optional(),
                 },
                 async execute(args, context) {
-                  const commandArgs = ["add-pitfall", args.title, args.description];
+                  const commandArgs = [args.title, args.description];
                   if (args.agent) commandArgs.push(`--agent=${args.agent}`);
                   if (args.tags?.length) commandArgs.push(`--tags=${args.tags.join(",")}`);
                   if (args.context) commandArgs.push(`--context=${args.context}`);
 
-                  return runRubyCli(context.directory, "bin/agentf-memory", commandArgs);
+                  return runAgentfCli(context.directory, "memory", "add-pitfall", commandArgs);
                 },
               }),
             },

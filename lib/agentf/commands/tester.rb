@@ -121,7 +121,7 @@ module Agentf
         source_path = Pathname.new(@base_path) + source_file
 
         unless source_path.exist?
-          return TestTemplate.new(
+          return Agentf::Tools::TestTemplate.new(
             test_file: "",
             test_code: "# Source file not found",
             framework: framework
@@ -156,7 +156,7 @@ module Agentf
                else []
         end
 
-        TestTemplate.new(
+        Agentf::Tools::TestTemplate.new(
           test_file: test_file,
           test_code: test_code,
           framework: framework,

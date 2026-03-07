@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Agentf
-  module Commands
+  module Tools
     # Data class for test templates
     class TestTemplate
       attr_reader :test_file, :test_code, :framework, :dependencies

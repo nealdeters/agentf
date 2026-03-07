@@ -1,18 +1,12 @@
 # frozen_string_literal: true
 
-require_relative "commands"
+require_relative "tools/file_match"
+require_relative "tools/test_template"
+require_relative "tools/error_analysis"
+require_relative "tools/component_spec"
 
 module Agentf
   module Tools
-    Explorer = Agentf::Commands::Explorer
-    Tester = Agentf::Commands::Tester
-    Debugger = Agentf::Commands::Debugger
-    Designer = Agentf::Commands::Designer
-    SecurityScanner = Agentf::Commands::SecurityScanner
-    MemoryReviewer = Agentf::Commands::MemoryReviewer
-    FileMatch = Agentf::Commands::FileMatch
-    TestTemplate = Agentf::Commands::TestTemplate
-    ErrorAnalysis = Agentf::Commands::ErrorAnalysis
-    ComponentSpec = Agentf::Commands::ComponentSpec
+    # All tool primitives are loaded above.
   end
 end

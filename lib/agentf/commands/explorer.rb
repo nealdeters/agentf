@@ -61,7 +61,7 @@ module Agentf
 
           begin
             line_num = Integer(parts[1])
-            matches << FileMatch.new(
+            matches << Agentf::Tools::FileMatch.new(
               path: parts[0],
               line_number: line_num,
               content: parts[2].strip,

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Agentf
-  module Commands
+  module Tools
     # Data class for error analysis
     class ErrorAnalysis
       attr_reader :error_type, :message, :location, :possible_causes, :suggested_fix, :stack_trace

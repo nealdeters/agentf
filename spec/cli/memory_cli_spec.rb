@@ -3,16 +3,11 @@
 require "spec_helper"
 require "stringio"
 
-load File.expand_path("../../bin/agentf-memory", __dir__)
-
-RSpec.describe Agentf::MemoryCLI do
+RSpec.describe Agentf::CLI::Memory do
   let(:reviewer) { instance_double(Agentf::Commands::MemoryReviewer) }
   let(:memory) { instance_double(Agentf::Memory::RedisMemory) }
 
-  before do
-    allow(Agentf::Commands::MemoryReviewer).to receive(:new).and_return(reviewer)
-    allow(Agentf::Memory::RedisMemory).to receive(:new).and_return(memory)
-  end
+  subject(:cli) { described_class.new(reviewer: reviewer, memory: memory) }
 
   describe "recent command" do
     it "requests recent memories with default limit" do
@@ -31,7 +26,7 @@ RSpec.describe Agentf::MemoryCLI do
         ]
       )
 
-      expect { described_class.new.run(["recent"]) }
+      expect { cli.run(["recent"]) }
         .to output(include("[SUCCESS] Example success"))
         .to_stdout
     end
@@ -42,7 +37,7 @@ RSpec.describe Agentf::MemoryCLI do
         "memories" => []
       )
 
-      expect { described_class.new.run(["recent", "-n", "5"]) }
+      expect { cli.run(["recent", "-n", "5"]) }
         .to output(include("No memories found."))
         .to_stdout
     end
@@ -53,7 +48,7 @@ RSpec.describe Agentf::MemoryCLI do
         "memories" => [{ "type" => "lesson", "title" => "A", "created_at" => "x", "agent" => "ARCHITECT" }]
       )
 
-      output = capture_stdout { described_class.new.run(["recent", "--json"]) }
+      output = capture_stdout { cli.run(["recent", "--json"]) }
       payload = JSON.parse(output)
       expect(payload["count"]).to eq(1)
       expect(payload["memories"]).to be_an(Array)
@@ -70,7 +65,7 @@ RSpec.describe Agentf::MemoryCLI do
         "unique_tags" => 4
       )
 
-      expect { described_class.new.run(["summary"]) }
+      expect { cli.run(["summary"]) }
         .to output(include("Memory Summary for project: test-project"))
         .to_stdout
     end
@@ -83,7 +78,7 @@ RSpec.describe Agentf::MemoryCLI do
         "count" => 2
       )
 
-      expect { described_class.new.run(["tags"]) }
+      expect { cli.run(["tags"]) }
         .to output(include("Tags (2):"))
         .to_stdout
     end
@@ -94,7 +89,7 @@ RSpec.describe Agentf::MemoryCLI do
         "count" => 0
       )
 
-      expect { described_class.new.run(["tags"]) }
+      expect { cli.run(["tags"]) }
         .to output(include("No tags found."))
         .to_stdout
     end
@@ -118,7 +113,7 @@ RSpec.describe Agentf::MemoryCLI do
         ]
       )
 
-      expect { described_class.new.run(["intents", "business"]) }
+      expect { cli.run(["intents", "business"]) }
         .to output(include("[BUSINESS_INTENT] Reliability"))
         .to_stdout
     end
@@ -127,7 +122,7 @@ RSpec.describe Agentf::MemoryCLI do
       allow(memory).to receive(:store_business_intent).and_return("episode_abcd")
 
       expect do
-        described_class.new.run([
+        cli.run([
           "add-business-intent",
           "Reliability",
           "Prioritize uptime",
@@ -142,7 +137,7 @@ RSpec.describe Agentf::MemoryCLI do
       allow(memory).to receive(:store_feature_intent).and_return("episode_efgh")
 
       expect do
-        described_class.new.run([
+        cli.run([
           "add-feature-intent",
           "Agent handoff",
           "Improve workflow continuity",
@@ -157,7 +152,7 @@ RSpec.describe Agentf::MemoryCLI do
       allow(memory).to receive(:store_episode).and_return("episode_lesson")
 
       expect do
-        described_class.new.run([
+        cli.run([
           "add-lesson",
           "New learning",
           "Use provider adapters",
@@ -172,7 +167,7 @@ RSpec.describe Agentf::MemoryCLI do
       allow(memory).to receive(:store_episode).and_return("episode_success")
 
       expect do
-        described_class.new.run([
+        cli.run([
           "add-success",
           "Install succeeded",
           "Wrote provider manifests",
@@ -185,7 +180,7 @@ RSpec.describe Agentf::MemoryCLI do
       allow(memory).to receive(:store_episode).and_return("episode_pitfall")
 
       expect do
-        described_class.new.run([
+        cli.run([
           "add-pitfall",
           "Bad provider value",
           "Unknown provider caused failure",
@@ -198,7 +193,7 @@ RSpec.describe Agentf::MemoryCLI do
       allow(memory).to receive(:store_episode).and_return("episode_json")
 
       output = capture_stdout do
-        described_class.new.run([
+        cli.run([
           "add-lesson",
           "JSON learning",
           "Structured output",
@@ -211,6 +206,65 @@ RSpec.describe Agentf::MemoryCLI do
       expect(payload["status"]).to eq("stored")
       expect(payload["type"]).to eq("lesson")
       expect(payload["id"]).to eq("episode_json")
+    end
+  end
+
+  describe "search command" do
+    it "extracts limit before joining query (finding #7 fix)" do
+      allow(reviewer).to receive(:search).with("react hooks", limit: 5).and_return(
+        "count" => 0,
+        "memories" => []
+      )
+
+      expect { cli.run(["search", "-n", "5", "react", "hooks"]) }
+        .to output(include("No memories found."))
+        .to_stdout
+    end
+
+    it "errors on empty query" do
+      expect { cli.run(["search"]) }.to raise_error(SystemExit)
+    end
+  end
+
+  describe "by-type command" do
+    it "accepts business_intent type (finding #11 fix)" do
+      allow(reviewer).to receive(:get_by_type).with("business_intent", limit: 10).and_return(
+        "count" => 0,
+        "memories" => []
+      )
+
+      expect { cli.run(["by-type", "business_intent"]) }
+        .to output(include("No memories found."))
+        .to_stdout
+    end
+
+    it "accepts feature_intent type (finding #11 fix)" do
+      allow(reviewer).to receive(:get_by_type).with("feature_intent", limit: 10).and_return(
+        "count" => 0,
+        "memories" => []
+      )
+
+      expect { cli.run(["by-type", "feature_intent"]) }
+        .to output(include("No memories found."))
+        .to_stdout
+    end
+
+    it "rejects invalid types" do
+      expect { cli.run(["by-type", "invalid"]) }.to raise_error(SystemExit)
+    end
+  end
+
+  describe "help command" do
+    it "prints help text (finding #6 fix)" do
+      expect { cli.run(["help"]) }
+        .to output(include("Usage: agentf memory <command>"))
+        .to_stdout
+    end
+  end
+
+  describe "error handling" do
+    it "exits on unknown subcommand" do
+      expect { cli.run(["nonexistent"]) }.to raise_error(SystemExit)
     end
   end
 

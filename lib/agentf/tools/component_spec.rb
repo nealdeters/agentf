@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Agentf
-  module Commands
+  module Tools
     # Simple data object describing a generated component
     class ComponentSpec
       attr_reader :name, :code, :framework, :style, :props

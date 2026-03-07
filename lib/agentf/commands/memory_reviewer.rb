@@ -51,8 +51,7 @@ module Agentf
 
       # Get all lessons learned
       def get_lessons(limit: 10)
-        memories = @memory.get_recent_memories(limit: limit)
-        lessons = memories.select { |m| m["type"] == "lesson" }
+        lessons = @memory.get_memories_by_type(type: "lesson", limit: limit)
         format_memories(lessons)
       rescue => e
         { "error" => e.message }
@@ -60,8 +59,7 @@ module Agentf
 
       # Get all successes
       def get_successes(limit: 10)
-        memories = @memory.get_recent_memories(limit: limit)
-        successes = memories.select { |m| m["type"] == "success" }
+        successes = @memory.get_memories_by_type(type: "success", limit: limit)
         format_memories(successes)
       rescue => e
         { "error" => e.message }
@@ -140,7 +138,9 @@ module Agentf
           "by_type" => {
             "pitfall" => memories.count { |m| m["type"] == "pitfall" },
             "lesson" => memories.count { |m| m["type"] == "lesson" },
-            "success" => memories.count { |m| m["type"] == "success" }
+            "success" => memories.count { |m| m["type"] == "success" },
+            "business_intent" => memories.count { |m| m["type"] == "business_intent" },
+            "feature_intent" => memories.count { |m| m["type"] == "feature_intent" }
           },
           "by_agent" => memories.each_with_object(Hash.new(0)) { |m, h| h[m["agent"]] += 1 },
           "unique_tags" => tags.length,

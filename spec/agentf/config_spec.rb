@@ -7,11 +7,13 @@ RSpec.describe Agentf::Config do
     around do |example|
       original_redis = ENV.delete("REDIS_URL")
       original_project = ENV.delete("AGENTF_PROJECT_NAME")
+      original_metrics = ENV.delete("AGENTF_METRICS_ENABLED")
 
       example.run
     ensure
       original_redis.nil? ? ENV.delete("REDIS_URL") : ENV["REDIS_URL"] = original_redis
       original_project.nil? ? ENV.delete("AGENTF_PROJECT_NAME") : ENV["AGENTF_PROJECT_NAME"] = original_project
+      original_metrics.nil? ? ENV.delete("AGENTF_METRICS_ENABLED") : ENV["AGENTF_METRICS_ENABLED"] = original_metrics
     end
 
     it "uses default Redis URL from env" do
@@ -20,6 +22,16 @@ RSpec.describe Agentf::Config do
 
     it "uses default project name from env" do
       expect(config.project_name).to eq("default")
+    end
+
+    it "enables metrics by default" do
+      expect(config.metrics_enabled).to be true
+    end
+
+    it "disables metrics when env flag is false" do
+      ENV["AGENTF_METRICS_ENABLED"] = "false"
+      flagged_config = Agentf::Config.new
+      expect(flagged_config.metrics_enabled).to be false
     end
   end
 
@@ -38,6 +50,11 @@ RSpec.describe Agentf::Config do
       config.base_path = "/custom/path"
       expect(config.base_path).to eq("/custom/path")
     end
+
+    it "allows setting metrics_enabled" do
+      config.metrics_enabled = false
+      expect(config.metrics_enabled).to be false
+    end
   end
 end
 
@@ -54,11 +71,15 @@ RSpec.describe Agentf do
 
   describe ".configure" do
     it "yields the config block" do
+      original_url = Agentf.config.redis_url
       Agentf.configure do |c|
         c.redis_url = "redis://test:6379"
       end
 
       expect(Agentf.config.redis_url).to eq("redis://test:6379")
+
+      # Restore to avoid polluting other tests
+      Agentf.config.redis_url = original_url
     end
 
     it "does not yield if no block given" do

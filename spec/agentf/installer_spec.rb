@@ -102,5 +102,41 @@ RSpec.describe Agentf::Installer do
         installer.install(providers: ["unknown"], scope: "local")
       end.to raise_error(ArgumentError, /Unknown provider/)
     end
+
+    it "maps all READ_ACTIONS to CLI commands in agent manifests" do
+      installer = described_class.new(global_root: global_root, local_root: local_root)
+
+      installer.install(
+        providers: ["opencode"],
+        scope: "local",
+        only_agents: ["architect"],
+        only_commands: []
+      )
+
+      agent_path = File.join(local_root, ".opencode/agents/ARCHITECT.md")
+      content = File.read(agent_path)
+
+      # Architect reads get_recent_memories and get_pitfalls
+      expect(content).to include("agentf memory recent")
+      expect(content).to include("agentf memory pitfalls")
+    end
+
+    it "includes read fallback for agents with no explicit reads" do
+      installer = described_class.new(global_root: global_root, local_root: local_root)
+
+      installer.install(
+        providers: ["opencode"],
+        scope: "local",
+        only_agents: ["specialist"],
+        only_commands: []
+      )
+
+      agent_path = File.join(local_root, ".opencode/agents/SPECIALIST.md")
+      content = File.read(agent_path)
+
+      # Specialist has no reads, so fallback should add a read action
+      expect(content).to include("Read:")
+      expect(content).to include("agentf memory recent")
+    end
   end
 end

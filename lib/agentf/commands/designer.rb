@@ -41,7 +41,7 @@ module Agentf
                  generate_react_css(name, props, design_spec)
                end
 
-        ComponentSpec.new(
+        Agentf::Tools::ComponentSpec.new(
           name: name,
           code: code,
           framework: fw,

@@ -6,7 +6,7 @@ A self-learning swarm of agents built in Ruby with Redis-backed memory for front
 
 - **9 Specialized Agents + Workflow Engine** - Specialized agents execute tasks while the Workflow Engine coordinates provider-adapted flows
 - **Redis Memory** - Long-term memory with semantic and episodic storage
-- **Command Implementations** - Built-in commands for exploration, testing, debugging, and design
+- **Commands + Tools Separation** - Domain operations live in `Agentf::Commands`, primitive value objects live in `Agentf::Tools`
 - **Workflow Engine** - Provider-adapted workflow selection based on task type
 - **Ruby Native** - Built in Ruby, easy to integrate into Rails/Ruby projects
 - **CLI Memory Review** - Inspect and search agent memories directly from the terminal
@@ -35,6 +35,8 @@ Or install directly:
 ```bash
 gem install agentf
 ```
+
+Agentf requires **Ruby >= 3.3.0**. If your system Ruby is older, use [rbenv](https://github.com/rbenv/rbenv) or [asdf](https://asdf-vm.com/) to manage versions. The repository ships a `.ruby-version` file pinned to 3.3.10.
 
 ### 3. Configure and Use
 
@@ -65,17 +67,25 @@ result = engine.execute(
 
 ## Command Line Interface
 
-Agentf ships with a CLI for inspecting shared memories:
+Agentf provides a unified `agentf` CLI with subcommands for memory, code exploration, manifest installation, and MCP server:
 
 ```bash
-# After installing the gem
-agentf memory recent -n 5
-
-# From a local clone
-bundle exec ruby bin/agentf-memory summary
+agentf memory recent -n 5        # list recent memories
+agentf code glob "lib/**/*.rb"   # find files
+agentf install --provider opencode,copilot
+agentf metrics summary -n 100      # aggregated workflow success metrics
+agentf metrics parity --json       # OpenCode vs Copilot parity deltas
+agentf update                    # regenerate manifests when gem version changes
+agentf mcp-server                # start MCP server over stdio
+agentf version                   # show version
+agentf help                      # show help
 ```
 
-Available commands include `recent`, `pitfalls`, `lessons`, `successes`, `intents`, `business-intents`, `feature-intents`, `add-business-intent`, `add-feature-intent`, `add-lesson`, `add-success`, `add-pitfall`, `tags`, `search`, `summary`, `by-tag`, `by-agent`, and `by-type`. Run `agentf memory help` for the full list and options. The CLI uses the same configuration/environment variables as the rest of Agentf, so be sure your `REDIS_URL` is set before running commands.
+Run `agentf <command> help` for detailed help on any subcommand. The CLI uses the same configuration/environment variables as the rest of Agentf, so be sure your `REDIS_URL` is set before running commands.
+
+### Memory Commands
+
+Available memory subcommands include `recent`, `pitfalls`, `lessons`, `successes`, `intents`, `business-intents`, `feature-intents`, `add-business-intent`, `add-feature-intent`, `add-lesson`, `add-success`, `add-pitfall`, `tags`, `search`, `summary`, `by-tag`, `by-agent`, and `by-type`.
 
 ```bash
 # Add business intent to the shared brain
@@ -105,58 +115,73 @@ Agentf can install provider manifests from class metadata into provider configur
 
 ```bash
 # Install for opencode and copilot into both global + local roots
-bundle exec ruby bin/install.rb --provider opencode,copilot
+agentf install --provider=opencode,copilot
 
 # Local-only install into a custom repository path
-bundle exec ruby bin/install.rb --scope local --local-root /path/to/repo
+agentf install --scope=local --local-root=/path/to/repo
 
 # Dry run for CI validation
-bundle exec ruby bin/install.rb --provider opencode --dry-run
+agentf install --provider=opencode --dry-run
 ```
+
+After upgrading the gem, use `agentf update` to regenerate manifests only when the version has changed:
+
+```bash
+# Regenerate manifests if the gem version changed since last install
+agentf update
+
+# Force regeneration even when versions match
+agentf update --force
+
+# Target specific providers and scope
+agentf update --provider=opencode,copilot --scope=local
+```
+
+The update command writes a `.agentf-version` stamp file into each provider directory (e.g. `.opencode/.agentf-version`) and skips regeneration when the stamp matches the current version.
 
 Installer output includes each agent's memory model (`reads`, `writes`, `policy`) in generated markdown so provider manifests stay aligned with runtime Redis behavior.
 
-This keeps current workflows stable while enabling provider-specific planner/executor adapters in future phases.
+## MCP Server
 
-## MCP Server (Local Only)
-
-Agentf includes a local MCP server wrapper in `mcp-server/` that runs over stdio and calls Ruby CLIs for code search and memory operations.
+Agentf includes a pure Ruby MCP server that communicates over stdio. It exposes code exploration and memory tools directly — no Node.js sidecar required.
 
 ```bash
-# install MCP server deps
-cd mcp-server
-npm install
-
-# run local-only MCP server (stdio)
-AGENTF_MCP_ROOT=/absolute/path/to/agentf npm start
+# Start the MCP server
+agentf mcp-server
 ```
 
 Exposed MCP tools:
-- `code_glob`
-- `code_grep`
-- `code_tree`
-- `code_related_files`
-- `memory_recent`
-- `memory_search`
-- `memory_add_lesson`
-- `memory_add_success`
-- `memory_add_pitfall`
+- `code_glob` — find files by glob pattern
+- `code_grep` — search file contents by regex
+- `code_tree` — get directory tree
+- `code_related_files` — find imports/related files
+- `memory_recent` — list recent memories
+- `memory_search` — search memories by keyword
+- `memory_add_lesson` — store a lesson
+- `memory_add_success` — store a success
+- `memory_add_pitfall` — store a pitfall
 
-The MCP server shells to:
-- `bin/agentf-code` for code discovery
-- `bin/agentf-memory --json` for Redis-backed memory read/write
+### Guardrails
 
-For Copilot, register this MCP server command in your local MCP client configuration so Copilot can call these tools directly.
+The MCP server supports guardrails via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AGENTF_MCP_ALLOWED_TOOLS` | `*` (all) | Comma-separated list of allowed tool names |
+| `AGENTF_MCP_ALLOW_WRITES` | `true` | Set to `false` to block write tools |
+| `AGENTF_MCP_MAX_ARG_LENGTH` | `4096` | Maximum length for any single tool argument |
+
+### Copilot Integration
+
+Register the MCP server in your MCP client configuration:
 
 ```json
 {
   "mcpServers": {
     "agentf": {
-      "command": "npm",
-      "args": ["start"],
-      "cwd": "/absolute/path/to/agentf/mcp-server",
+      "command": "agentf",
+      "args": ["mcp-server"],
       "env": {
-        "AGENTF_MCP_ROOT": "/absolute/path/to/agentf",
         "AGENTF_MCP_ALLOW_WRITES": "false",
         "AGENTF_MCP_ALLOWED_TOOLS": "code_glob,code_grep,code_tree,code_related_files,memory_recent,memory_search"
       }
@@ -165,34 +190,49 @@ For Copilot, register this MCP server command in your local MCP client configura
 }
 ```
 
-## OpenCode Local Tools
+## Metrics
 
-OpenCode should call local custom tools directly from `.opencode/tools/*.ts` and not through MCP.
+Agentf records workflow metric episodes automatically at the end of each workflow run. Metrics are stored in Redis episodic memory and tagged with `workflow_metric`.
 
-The provided `.opencode/tools/agentf-tools.ts` exposes wrappers for:
-- `code_glob`
-- `code_grep`
-- `code_tree`
-- `code_related_files`
-- `memory_recent`
-- `memory_search`
-- `memory_add_lesson`
-- `memory_add_success`
-- `memory_add_pitfall`
+Track quality and parity directly from CLI:
+
+```bash
+# Workflow quality summary (completion, approval, failure, security issue rates)
+agentf metrics summary -n 100
+
+# Provider parity deltas between OpenCode and Copilot
+agentf metrics parity -n 200 --json
+```
+
+This creates a repeatable feedback loop for agent experimentation and reduces reliance on ad-hoc manual evaluation.
 
 ## Project Structure
 
 ```
+bin/
+└── agentf              # Unified CLI entry point
+
 lib/agentf/
-├── agentf.rb           # Main entry point
-├── memory.rb           # Redis memory storage
+├── version.rb          # Agentf::VERSION constant
+├── memory.rb           # Redis memory storage (RedisJSON + RediSearch)
 ├── workflow_engine.rb  # Provider-adapted workflow coordination
-├── service/
-│   └── providers.rb    # Provider adapters (OpenCode, Copilot)
+├── installer.rb        # Provider manifest installer
 ├── agents.rb           # Agent implementations
-├── commands.rb         # Command implementations
-├── tools.rb            # Backward-compatible alias to Commands
-└── installer.rb        # Provider manifest installer
+├── commands.rb         # Command loader (`Agentf::Commands`)
+├── tools.rb            # Tool loader (`Agentf::Tools`)
+├── commands/           # Domain operations (Explorer, Tester, Debugger...)
+├── tools/              # Primitive types (FileMatch, TestTemplate...)
+├── cli/
+│   ├── router.rb       # Top-level subcommand dispatch
+│   ├── arg_parser.rb   # Shared argument parsing helpers
+│   ├── memory.rb       # `agentf memory` subcommand
+│   ├── code.rb         # `agentf code` subcommand
+│   ├── install.rb      # `agentf install` subcommand
+│   └── update.rb       # `agentf update` subcommand
+├── mcp/
+│   └── server.rb       # Pure Ruby MCP server (9 tools, guardrails)
+└── service/
+    └── providers.rb    # Provider adapters (OpenCode, Copilot)
 ```
 
 ## Agents
@@ -212,7 +252,7 @@ lib/agentf/
 
 ## Commands
 
-`Agentf::Commands::*` is canonical. `Agentf::Tools::*` remains available as a compatibility alias for existing integrations.
+`Agentf::Commands::*` is the domain-operation layer used by agents, workflow execution, CLI, and MCP adapters.
 
 ### Explorer
 ```ruby
@@ -285,6 +325,17 @@ if scan["issues"].any?
 end
 ```
 
+## Tools
+
+`Agentf::Tools::*` contains primitive value objects shared by commands.
+
+- `Agentf::Tools::FileMatch`
+- `Agentf::Tools::TestTemplate`
+- `Agentf::Tools::ErrorAnalysis`
+- `Agentf::Tools::ComponentSpec`
+
+These are intentionally separate from commands so provider adapters can keep behavior parity while sharing stable data structures.
+
 ## Workflow Types
 
 The Workflow Engine automatically selects the best workflow per provider adapter:
@@ -321,6 +372,7 @@ pre-commit install
 
 - `REDIS_URL` - Redis connection string (default: `redis://localhost:6379`)
 - `AGENTF_PROJECT_NAME` - Project identifier for memory isolation
+- `AGENTF_METRICS_ENABLED` - Enable/disable workflow metrics capture and `agentf metrics` CLI (default: `true`)
 - Any additional variables placed in `.env` are automatically loaded at runtime
 
 > **Note:** If you provide a `REDIS_URL` without a scheme (e.g. `redis-1234.example.com:6379`), Agentf will automatically prefix it with `redis://` for convenience.

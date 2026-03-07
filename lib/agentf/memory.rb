@@ -33,7 +33,7 @@ module Agentf
           "success" => success,
           "created_at" => Time.now.to_i,
           "agent" => agent,
-          "embedding" => embedding
+          "embedding" => JSON.generate(embedding)
         }
 
         key = "semantic:#{task_id}"
@@ -228,7 +228,7 @@ module Agentf
         if @search_supported
           search_episodic(query: "@type:pitfall @project:{#{@project}}", limit: limit)
         else
-          fetch_memories_without_search(limit: limit).select { |mem| mem["type"] == "pitfall" }
+          fetch_memories_without_search(limit: [limit * 4, 100].min).select { |mem| mem["type"] == "pitfall" }.first(limit)
         end
       end
 
@@ -268,7 +268,7 @@ module Agentf
         @client.call(
           "FT.CREATE", "episodic:logs",
           "ON", "JSON",
-          "PREFIX", "1", "episodic",
+          "PREFIX", "1", "episodic:",
           "SCHEMA",
           "$.id", "AS", "id", "TEXT",
           "$.type", "AS", "type", "TEXT",
@@ -438,7 +438,7 @@ module Agentf
       end
 
       def client_options
-        { url: @redis_url, decode_responses: true }
+        { url: @redis_url }
       end
     end
 

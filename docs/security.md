@@ -1,6 +1,6 @@
 # Security Practices for Agentf
 
-Agentf includes a dedicated **SECURITY** agent that runs in every workflow (aside from pure exploration) to surface potential risks early. The agent leverages `Agentf::Tools::SecurityScanner`, which performs lightweight detection for:
+Agentf includes a dedicated **SECURITY** agent that runs in every workflow (aside from pure exploration) to surface potential risks early. The agent leverages `Agentf::Commands::SecurityScanner`, which performs lightweight detection for:
 
 - Hard-coded secrets (API keys, private keys, password assignments)
 - Prompt-injection attempts that try to exfiltrate environment variables or override instructions
@@ -29,7 +29,7 @@ While this provides a safety net, you should pair it with additional "shift-left
 You can fetch the canonical checklist at runtime with:
 
 ```ruby
-Agentf::Tools::SecurityScanner.new.best_practices
+Agentf::Commands::SecurityScanner.new.best_practices
 ```
 
 Adopting these practices keeps secrets out of your repo, enforces layered security checks, and helps the orchestration workflows remain resilient against prompt-injection attacks.

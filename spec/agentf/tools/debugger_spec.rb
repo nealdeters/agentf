@@ -91,5 +91,23 @@ RSpec.describe Agentf::Commands::Debugger do
       expect(suggestions).to be_a(String)
       expect(suggestions).not_to be_empty
     end
+
+    it "suggests checking for nil values" do
+      analysis = debugger.parse_error("NoMethodError: undefined method 'foo' for nil:NilClass")
+      suggestions = debugger.suggest_fix(analysis)
+      expect(suggestions).to include("Check for nil values")
+    end
+
+    it "suggests checking undefined variables (no duplicate condition)" do
+      analysis = debugger.parse_error("NameError: undefined local variable 'x'")
+      suggestions = debugger.suggest_fix(analysis)
+      expect(suggestions).to include("Verify variable is defined")
+    end
+
+    it "suggests timeout handling" do
+      analysis = debugger.parse_error("NetworkError: request timeout after 30s")
+      suggestions = debugger.suggest_fix(analysis)
+      expect(suggestions).to include("timeout")
+    end
   end
 end

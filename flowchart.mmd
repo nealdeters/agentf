@@ -1,5 +1,6 @@
 flowchart TD
-  U[Developer / CI] --> ICLI[bin/install.rb]
+  U[Developer / CI] --> CLI[bin/agentf]
+  CLI --> ICLI[agentf install / update]
   ICLI --> INS[Agentf::Installer]
 
   subgraph Source[Class Metadata Source]
@@ -7,6 +8,8 @@ flowchart TD
 Agentf::Agents::*]
     C[Command classes
 Agentf::Commands::*]
+    T[Tool primitives
+Agentf::Tools::*]
   end
 
   INS --> A
@@ -28,24 +31,34 @@ reads/writes/policy]
 OpenCode / Copilot]
     AG[Agents]
     COM[Commands]
+    TOOLS[Tools]
   end
 
   APP --> WF
   WF --> P
   P --> AG
   P --> COM
+  COM --> TOOLS
 
   WF -->|get_relevant_context| REDIS[(RedisMemory)]
   WF -->|store_feature_intent| REDIS
   AG -->|store_success/pitfall/lesson| REDIS
 
   subgraph MemoryCLI[Memory CLI]
-    MCLI[bin/agentf-memory]
+    MCLI[agentf memory ...]
     MR[Commands::MemoryReviewer]
   end
 
   MCLI --> MR
   MR -->|query/search/summaries| REDIS
   MCLI -->|add-business-intent / add-feature-intent| REDIS
+
+  subgraph MCP[MCP Server]
+    MS[agentf mcp-server]
+    MTOOLS[code_* + memory_* tools]
+  end
+
+  MS --> MTOOLS
+  MTOOLS --> COM
 
   REDIS -.optional doc sync by agent behavior.-> AMD
