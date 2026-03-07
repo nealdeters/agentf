@@ -6,6 +6,7 @@ require_relative "code"
 require_relative "install"
 require_relative "update"
 require_relative "metrics"
+require_relative "architecture"
 
 module Agentf
   module CLI
@@ -18,7 +19,7 @@ module Agentf
     #   agentf version
     #   agentf help
     class Router
-      SUBCOMMANDS = %w[memory code metrics install update mcp-server version help].freeze
+      SUBCOMMANDS = %w[memory code metrics architecture install update mcp-server version help].freeze
 
       def run(args)
         subcommand = args.shift || "help"
@@ -37,6 +38,8 @@ module Agentf
             $stderr.puts "Metrics are disabled. Set AGENTF_METRICS_ENABLED=true to enable."
             exit 1
           end
+        when "architecture"
+          Architecture.new.run(args)
         when "update"
           Update.new.run(args)
         when "mcp-server"
@@ -68,6 +71,7 @@ module Agentf
             memory       Manage agent memory (lessons, pitfalls, successes, intents)
             code         Explore codebase (glob, grep, tree, related files)
             metrics      Show workflow success and provider parity metrics
+            architecture Analyze architecture layers and violations
             install      Generate provider manifests (agents, commands, tools)
             update       Regenerate manifests when gem version changes
             mcp-server   Start MCP server over stdio (for Copilot integration)
@@ -79,6 +83,9 @@ module Agentf
 
           Env:
             AGENTF_METRICS_ENABLED=true|false   Enable/disable workflow metrics capture and CLI
+            AGENTF_WORKFLOW_CONTRACT_ENABLED=true|false   Enable/disable workflow contract checks
+            AGENTF_WORKFLOW_CONTRACT_MODE=advisory|enforcing|off   Contract behavior mode
+            AGENTF_DEFAULT_PACK=generic|rails_standard|rails_37signals|rails_feature_spec
 
           Examples:
             agentf memory recent -n 5
@@ -88,6 +95,8 @@ module Agentf
             agentf install --provider opencode,copilot --scope local
             agentf metrics summary -n 100
             agentf metrics parity --json
+            agentf architecture analyze
+            agentf architecture review --json
             agentf update
             agentf update --force --provider=opencode,copilot
             agentf mcp-server

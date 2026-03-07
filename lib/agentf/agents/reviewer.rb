@@ -26,6 +26,16 @@ module Agentf
         MEMORY_CONCEPTS
       end
 
+      def self.policy_boundaries
+        {
+          "always" => ["Report approval decision", "Highlight known pitfalls in review findings"],
+          "ask_first" => ["Approving with unresolved critical security issues"],
+          "never" => ["Approve without any review evidence"],
+          "required_inputs" => [],
+          "required_outputs" => ["approved", "issues"]
+        }
+      end
+
       def review(subtask_result)
         log "Reviewing subtask #{subtask_result['subtask_id']}"
 

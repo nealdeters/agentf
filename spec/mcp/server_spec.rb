@@ -18,12 +18,13 @@ RSpec.describe Agentf::MCP::Server do
   # ── Tool registration ───────────────────────────────────────────
 
   describe "tool registration" do
-    it "registers all 9 tools" do
+    it "registers all 10 tools" do
       tools = mcp.server.list_tools
       names = tools.map { |t| t[:name] }
 
       expect(names).to contain_exactly(
         "code_glob", "code_grep", "code_tree", "code_related_files",
+        "architecture_analyze_layers",
         "memory_recent", "memory_search",
         "memory_add_lesson", "memory_add_success", "memory_add_pitfall"
       )

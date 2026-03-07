@@ -15,6 +15,13 @@ RSpec.describe Agentf::Agents::Base do
   it "has a log method" do
     expect(agent).to respond_to(:log)
   end
+
+  it "exposes policy boundaries" do
+    boundaries = agent.class.policy_boundaries
+    expect(boundaries).to have_key("always")
+    expect(boundaries).to have_key("ask_first")
+    expect(boundaries).to have_key("never")
+  end
 end
 
 RSpec.describe Agentf::Agents::Architect do

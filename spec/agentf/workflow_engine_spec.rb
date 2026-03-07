@@ -52,6 +52,7 @@ RSpec.describe Agentf::WorkflowEngine do
 
       expect(result).to have_key("provider")
       expect(result["provider"]).to eq("OPENCODE")
+      expect(result["workflow_contract"]).to be_a(Hash)
       expect(result["completed_agents"]).not_to be_empty
     end
 
@@ -60,7 +61,14 @@ RSpec.describe Agentf::WorkflowEngine do
       context = { "design_spec" => "Button component" }
 
       result = engine.execute("Create button", context: context)
+      expect(result["pack"]).to eq("generic")
       expect(result["context"]).to eq(context)
+    end
+
+    it "resolves rails pack from context" do
+      engine = described_class.new(memory: memory, base_path: base_path, provider: :opencode)
+      result = engine.execute("Build rails feature", context: { "stack" => "rails" })
+      expect(result["pack"]).to eq("rails_standard")
     end
 
     it "records workflow metrics via commands metrics recorder" do

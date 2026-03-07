@@ -30,6 +30,16 @@ module Agentf
         "You are the #{typed_name} agent."
       end
 
+      def self.policy_boundaries
+        {
+          "always" => [],
+          "ask_first" => [],
+          "never" => [],
+          "required_inputs" => [],
+          "required_outputs" => []
+        }
+      end
+
       def initialize(memory)
         @memory = memory
         @name = self.class.typed_name

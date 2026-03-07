@@ -26,6 +26,16 @@ module Agentf
         MEMORY_CONCEPTS
       end
 
+      def self.policy_boundaries
+        {
+          "always" => ["Persist execution outcome", "Return deterministic success boolean"],
+          "ask_first" => ["Applying architecture style changes across unrelated modules"],
+          "never" => ["Claim implementation complete without execution result"],
+          "required_inputs" => [],
+          "required_outputs" => ["subtask_id", "success"]
+        }
+      end
+
       def execute(subtask)
         log "Executing: #{subtask['description']}"
 

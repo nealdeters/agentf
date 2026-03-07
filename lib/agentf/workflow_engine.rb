@@ -3,6 +3,8 @@
 require_relative "agents"
 require_relative "commands"
 require_relative "context_builder"
+require_relative "workflow_contract"
+require_relative "agent_policy"
 
 module Agentf
   class WorkflowEngine
@@ -17,15 +19,22 @@ module Agentf
       @memory = memory || Agentf::Memory::RedisMemory.new
       @base_path = base_path || Agentf.config.base_path
       @name = "WORKFLOW_ENGINE"
-      @provider = build_provider(provider)
+      @provider_ref = provider
+      @provider = build_provider(@provider_ref, pack: Agentf.config.default_pack)
 
       @explorer_commands = Commands::Explorer.new(base_path: @base_path)
       @tester_commands = Commands::Tester.new(base_path: @base_path)
       @debugger_commands = Commands::Debugger.new(base_path: @base_path)
       @designer_commands = Commands::Designer.new(base_path: @base_path)
       @security_commands = Commands::SecurityScanner.new
+      @architecture_commands = Commands::Architecture.new(base_path: @base_path)
       @metrics_commands = Agentf.config.metrics_enabled ? Commands::Metrics.new(memory: @memory) : nil
       @context_builder = ContextBuilder.new(memory: @memory)
+      @agent_policy = Agentf::AgentPolicy.new
+      @workflow_contract = Agentf::WorkflowContract.new(
+        enabled: Agentf.config.workflow_contract_enabled,
+        mode: Agentf.config.workflow_contract_mode
+      )
 
       @agents = {
         "ARCHITECT" => Agents::Architect.new(@memory),
@@ -47,17 +56,36 @@ module Agentf
       log "EXECUTING #{provider.name} WORKFLOW"
       log "=" * 60
 
-      plan = provider.build_plan(task: task, context: context || {}, logger: method(:log))
+      resolved_context = context || {}
+      selected_pack = resolve_pack(task: task, context: resolved_context)
+      @provider = build_provider(@provider_ref, pack: selected_pack)
 
       @workflow_state = {
         "task" => task,
-        "provider" => plan["provider"],
-        "workflow_type" => plan["workflow_type"],
-        "context" => context || {},
-        "tdd" => initialize_tdd_state(plan["workflow_type"]),
+        "provider" => @provider.name,
+        "pack" => selected_pack,
+        "workflow_contract" => {
+          "enabled" => @workflow_contract.enabled?,
+          "mode" => @workflow_contract.mode,
+          "events" => [],
+          "blocked" => false
+        },
+        "context" => resolved_context,
         "results" => [],
         "completed_agents" => []
       }
+
+      return @workflow_state if run_contract_stage("spec").fetch("blocked")
+
+      plan = provider.build_plan(task: task, context: resolved_context, logger: method(:log))
+      return @workflow_state if run_contract_stage("plan", plan: plan).fetch("blocked")
+
+      @workflow_state.merge!(
+        "provider" => plan["provider"],
+        "workflow_type" => plan["workflow_type"],
+        "tdd" => initialize_tdd_state(plan["workflow_type"]),
+        "plan" => plan
+      )
 
       attach_initial_brain_context
       persist_feature_intent(task: task, workflow_type: plan["workflow_type"], context: @workflow_state["context"])
@@ -69,7 +97,16 @@ module Agentf
         @workflow_state["completed_agents"] << agent_name
       end
 
+      return @workflow_state if run_contract_stage("execute").fetch("blocked")
+
+      architecture_review = perform_architecture_review
+      @workflow_state["architecture_review"] = architecture_review
+
+      return @workflow_state if run_contract_stage("review").fetch("blocked")
+
+      run_contract_stage("finalize")
       summary = summarize_workflow
+      @workflow_state["summary"] = summary
       record_workflow_metrics
 
       log ""
@@ -86,13 +123,23 @@ module Agentf
 
     private
 
-    def build_provider(provider)
+    def build_provider(provider, pack:)
       return provider if provider.respond_to?(:build_plan)
 
       klass = PROVIDERS[provider.to_sym]
       raise ArgumentError, "Unknown provider: #{provider}. Valid providers: #{PROVIDERS.keys.join(', ')}" unless klass
 
-      klass.new
+      klass.new(pack: pack)
+    end
+
+    def resolve_pack(task:, context:)
+      requested = context["pack"].to_s.strip
+      return requested.downcase unless requested.empty?
+
+      default_pack = Agentf.config.default_pack.to_s.strip
+      return default_pack.downcase unless default_pack.empty? || default_pack.casecmp("generic").zero?
+
+      Agentf::Packs.infer(context.merge("task" => task))
     end
 
     def log(message)
@@ -128,6 +175,14 @@ module Agentf
         logger: method(:log)
       )
 
+      policy_violations = @agent_policy.validate(
+        agent_name: agent_name,
+        boundaries: @agents.fetch(agent_name).class.policy_boundaries,
+        context: enriched_context,
+        result: result
+      )
+      append_policy_violations(policy_violations)
+
       persist_agent_learning(agent_name: agent_name, result: result)
       transition_tdd_phase(agent_name: agent_name, result: result)
       result
@@ -139,7 +194,8 @@ module Agentf
         "tester" => @tester_commands,
         "debugger" => @debugger_commands,
         "designer" => @designer_commands,
-        "security" => @security_commands
+        "security" => @security_commands,
+        "architecture" => @architecture_commands
       }
     end
 
@@ -226,13 +282,15 @@ module Agentf
       errors = results.select { |r| r["result"]["error"] }
       reviews = results.select { |r| r["agent"] == "REVIEWER" }
       approved = reviews.any? { |r| r["result"]["approved"] }
+      contract_blocked = @workflow_state.dig("workflow_contract", "blocked") == true
 
       {
-        "status" => errors.any? ? "failed" : (approved ? "approved" : "completed"),
+        "status" => contract_blocked ? "blocked" : (errors.any? ? "failed" : (approved ? "approved" : "completed")),
         "total_agents" => results.size,
         "errors" => errors.size,
         "approved" => approved,
-        "tdd" => @workflow_state["tdd"]
+        "tdd" => @workflow_state["tdd"],
+        "contract_blocked" => contract_blocked
       }
     end
 
@@ -298,6 +356,69 @@ module Agentf
       log "Metrics capture skipped: #{result['error']}"
     rescue StandardError => e
       log "Metrics capture skipped: #{e.message}"
+    end
+
+    def perform_architecture_review
+      result = @architecture_commands.review_layer_violations
+      @memory.store_lesson(
+        title: "Architecture review completed",
+        description: "Layer violations: #{Array(result['violations']).length}",
+        context: @workflow_state["task"],
+        tags: [@workflow_state["workflow_type"], "architecture_review"],
+        agent: @name
+      )
+      result
+    rescue StandardError => e
+      { "error" => e.message, "violations" => [] }
+    end
+
+    def run_contract_stage(stage, plan: nil)
+      evaluation = @workflow_contract.check(stage: stage, workflow_state: @workflow_state, plan: plan)
+      @workflow_state["workflow_contract"]["events"] << evaluation
+      persist_contract_event(evaluation)
+
+      if evaluation["blocked"]
+        @workflow_state["workflow_contract"]["blocked"] = true
+        log "Workflow blocked by contract at #{stage}: #{evaluation['violations'].map { |v| v['code'] }.join(', ')}"
+      elsif evaluation["violations"].any?
+        log "Workflow contract warnings at #{stage}: #{evaluation['violations'].map { |v| v['code'] }.join(', ')}"
+      end
+
+      evaluation
+    end
+
+    def persist_contract_event(evaluation)
+      @memory.store_episode(
+        type: "lesson",
+        title: "Workflow contract #{evaluation['stage']} #{evaluation['ok'] ? 'passed' : 'violated'}",
+        description: "mode=#{evaluation['mode']} blocked=#{evaluation['blocked']}",
+        context: JSON.generate(evaluation),
+        tags: ["workflow_contract", evaluation["stage"], evaluation["ok"] ? "pass" : "violation"],
+        agent: @name,
+        metadata: { "workflow_contract_event" => true }
+      )
+    rescue StandardError => e
+      log "Contract event persistence skipped: #{e.message}"
+    end
+
+    def append_policy_violations(policy_violations)
+      return if policy_violations.empty?
+
+      @workflow_state["policy_violations"] ||= []
+      @workflow_state["policy_violations"].concat(policy_violations)
+      policy_violations.each do |violation|
+        @memory.store_episode(
+          type: "pitfall",
+          title: "Agent policy violation: #{violation['code']}",
+          description: violation["message"],
+          context: @workflow_state["task"],
+          tags: ["agent_policy", violation["agent"].to_s.downcase],
+          agent: @name,
+          metadata: { "policy_violation" => true, "severity" => violation["severity"] }
+        )
+      end
+    rescue StandardError => e
+      log "Policy violation persistence skipped: #{e.message}"
     end
   end
 end

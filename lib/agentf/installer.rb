@@ -157,7 +157,8 @@ module Agentf
         "name" => klass.typed_name,
         "description" => klass.description,
         "commands" => klass.commands,
-        "memory" => klass.memory_concepts
+        "memory" => klass.memory_concepts,
+        "policy" => klass.policy_boundaries
       }
 
       <<~MARKDOWN
@@ -171,6 +172,13 @@ module Agentf
 
         ## Memory Actions
         #{memory_actions_for(klass).join("\n")}
+
+        ## Policy Boundaries
+        - Always: #{Array(klass.policy_boundaries["always"]).join("; ")}
+        - Ask first: #{Array(klass.policy_boundaries["ask_first"]).join("; ")}
+        - Never: #{Array(klass.policy_boundaries["never"]).join("; ")}
+        - Required inputs: #{Array(klass.policy_boundaries["required_inputs"]).join(", ")}
+        - Required outputs: #{Array(klass.policy_boundaries["required_outputs"]).join(", ")}
 
         #{copilot_mcp_agent_section(provider: provider)}
       MARKDOWN
@@ -272,6 +280,7 @@ module Agentf
         3. Persist feature intent at workflow start
         4. Persist lessons/pitfalls from each agent execution
         5. Return full workflow state for manual review and future autonomous control
+        6. Enforce workflow contract stages (`spec`, `plan`, `execute`, `review`, `finalize`) when enabled
 
         ## Execution Flow
 
@@ -286,6 +295,7 @@ module Agentf
         - The engine is provider-agnostic at runtime.
         - Agent and tool interfaces are unchanged.
         - Provider adapters own sequencing defaults.
+        - Workflow contract defaults to advisory mode and can be disabled with `AGENTF_WORKFLOW_CONTRACT_ENABLED=false`.
       MARKDOWN
     end
 

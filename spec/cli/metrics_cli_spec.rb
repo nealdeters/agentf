@@ -17,7 +17,10 @@ RSpec.describe Agentf::CLI::Metrics do
         "approval_rate" => 0.6,
         "failure_rate" => 0.2,
         "security_issue_rate" => 0.4,
-        "avg_agents_executed" => 6.2
+        "avg_agents_executed" => 6.2,
+        "contract_adherence_rate" => 0.9,
+        "contract_blocked_runs" => 1,
+        "policy_violation_rate" => 0.1
       )
 
       expect { cli.run(["summary"]) }
@@ -32,7 +35,10 @@ RSpec.describe Agentf::CLI::Metrics do
         "approval_rate" => 0.7,
         "failure_rate" => 0.1,
         "security_issue_rate" => 0.2,
-        "avg_agents_executed" => 5.5
+        "avg_agents_executed" => 5.5,
+        "contract_adherence_rate" => 1.0,
+        "contract_blocked_runs" => 0,
+        "policy_violation_rate" => 0.0
       )
 
       output = capture_stdout { cli.run(["summary", "-n", "20", "--json"]) }

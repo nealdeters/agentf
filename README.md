@@ -1,6 +1,6 @@
-# Agentf - Multi-Agent System with Shared Memory
+# Agentf - Multi-Agent Workflow Engine with Shared Memory
 
-A self-learning swarm of agents built in Ruby with Redis-backed memory for frontend, backend, and API development workflows.
+A memory-assisted multi-agent workflow engine built in Ruby with Redis-backed memory for frontend, backend, and API development workflows.
 
 ## Features
 
@@ -67,12 +67,13 @@ result = engine.execute(
 
 ## Command Line Interface
 
-Agentf provides a unified `agentf` CLI with subcommands for memory, code exploration, manifest installation, and MCP server:
+Agentf provides a unified `agentf` CLI with subcommands for memory, code exploration, architecture review, metrics, manifest installation, and MCP server:
 
 ```bash
 agentf memory recent -n 5        # list recent memories
 agentf code glob "lib/**/*.rb"   # find files
-agentf install --provider opencode,copilot
+agentf install --provider=opencode,copilot
+agentf architecture analyze         # architecture layer distribution
 agentf metrics summary -n 100      # aggregated workflow success metrics
 agentf metrics parity --json       # OpenCode vs Copilot parity deltas
 agentf update                    # regenerate manifests when gem version changes
@@ -143,18 +144,19 @@ Installer output includes each agent's memory model (`reads`, `writes`, `policy`
 
 ## MCP Server
 
-Agentf includes a pure Ruby MCP server that communicates over stdio. It exposes code exploration and memory tools directly — no Node.js sidecar required.
+Agentf includes a pure Ruby MCP server that communicates over stdio. It exposes code exploration, memory, and architecture tools directly - no Node.js sidecar required.
 
 ```bash
 # Start the MCP server
 agentf mcp-server
 ```
 
-Exposed MCP tools:
+Exposed MCP tools (10):
 - `code_glob` — find files by glob pattern
 - `code_grep` — search file contents by regex
 - `code_tree` — get directory tree
 - `code_related_files` — find imports/related files
+- `architecture_analyze_layers` - analyze layers, review violations, or build gradual adoption plans
 - `memory_recent` — list recent memories
 - `memory_search` — search memories by keyword
 - `memory_add_lesson` — store a lesson
@@ -227,10 +229,12 @@ lib/agentf/
 │   ├── arg_parser.rb   # Shared argument parsing helpers
 │   ├── memory.rb       # `agentf memory` subcommand
 │   ├── code.rb         # `agentf code` subcommand
+│   ├── architecture.rb # `agentf architecture` subcommand
+│   ├── metrics.rb      # `agentf metrics` subcommand
 │   ├── install.rb      # `agentf install` subcommand
 │   └── update.rb       # `agentf update` subcommand
 ├── mcp/
-│   └── server.rb       # Pure Ruby MCP server (9 tools, guardrails)
+│   └── server.rb       # Pure Ruby MCP server (10 tools, guardrails)
 └── service/
     └── providers.rb    # Provider adapters (OpenCode, Copilot)
 ```
@@ -338,7 +342,9 @@ These are intentionally separate from commands so provider adapters can keep beh
 
 ## Workflow Types
 
-The Workflow Engine automatically selects the best workflow per provider adapter:
+The Workflow Engine classifies tasks into workflow types and uses provider-specific templates.
+
+OpenCode defaults:
 
 | Workflow | Agents | Use Case |
 |----------|--------|----------|
@@ -348,9 +354,19 @@ The Workflow Engine automatically selects the best workflow per provider adapter
 | `exploration` | EXPLORER | Understanding code |
 | `refactor` | ARCHITECT → EXPLORER → SPECIALIST → TESTER → SECURITY → REVIEWER | Code improvements |
 
+Copilot defaults:
+
+| Workflow | Agents |
+|----------|--------|
+| `feature` | ARCHITECT → SPECIALIST → TESTER → SECURITY → REVIEWER → DOCUMENTER |
+| `bugfix` | DEBUGGER → SPECIALIST → TESTER → SECURITY → REVIEWER |
+| `quick_fix` | SPECIALIST → REVIEWER |
+| `exploration` | EXPLORER |
+| `refactor` | ARCHITECT → SPECIALIST → TESTER → REVIEWER |
+
 ## Security & Secret Scanning
 
-Agentf ships with a dedicated **SECURITY** agent that runs in every workflow except plain exploration. It performs lightweight secret scanning and prompt-injection detection before the reviewer signs off. To build on that foundation:
+Agentf ships with a dedicated **SECURITY** agent for lightweight secret scanning and prompt-injection detection. It is included by default in OpenCode `feature`, `bugfix`, `quick_fix`, and `refactor` workflows, and in Copilot `feature` and `bugfix` workflows. To build on that foundation:
 
 - **Pre-commit secret scanning:** add tools such as [Gitleaks](https://github.com/gitleaks/gitleaks) or [TruffleHog](https://github.com/trufflesecurity/trufflehog) to your local workflow (e.g., via pre-commit hooks). A starter `.pre-commit-config.yaml` is included with a Gitleaks hook enabled by default.
 - **Enable push protection:** turn on GitHub Secret Scanning Push Protection so leaked credentials are blocked before they land in the repository.
@@ -373,6 +389,9 @@ pre-commit install
 - `REDIS_URL` - Redis connection string (default: `redis://localhost:6379`)
 - `AGENTF_PROJECT_NAME` - Project identifier for memory isolation
 - `AGENTF_METRICS_ENABLED` - Enable/disable workflow metrics capture and `agentf metrics` CLI (default: `true`)
+- `AGENTF_WORKFLOW_CONTRACT_ENABLED` - Enable/disable workflow contract checks (default: `true`)
+- `AGENTF_WORKFLOW_CONTRACT_MODE` - Contract mode: `advisory`, `enforcing`, or `off` (default: `advisory`)
+- `AGENTF_DEFAULT_PACK` - Default workflow pack when context does not resolve one (default: `generic`)
 - Any additional variables placed in `.env` are automatically loaded at runtime
 
 > **Note:** If you provide a `REDIS_URL` without a scheme (e.g. `redis-1234.example.com:6379`), Agentf will automatically prefix it with `redis://` for convenience.

@@ -67,6 +67,9 @@ module Agentf
         puts "- failure rate: #{payload['failure_rate']}"
         puts "- security issue rate: #{payload['security_issue_rate']}"
         puts "- avg agents executed: #{payload['avg_agents_executed']}"
+        puts "- contract adherence rate: #{payload['contract_adherence_rate']}"
+        puts "- contract blocked runs: #{payload['contract_blocked_runs']}"
+        puts "- policy violation rate: #{payload['policy_violation_rate']}"
       end
 
       def emit_error(message)

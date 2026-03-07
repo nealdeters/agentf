@@ -27,6 +27,16 @@ module Agentf
         MEMORY_CONCEPTS
       end
 
+      def self.policy_boundaries
+        {
+          "always" => ["Return issue list and best practices", "Persist outcome as success or pitfall"],
+          "ask_first" => ["Allowing known secret patterns in context"],
+          "never" => ["Echo raw secrets in output"],
+          "required_inputs" => [],
+          "required_outputs" => ["issues", "best_practices"]
+        }
+      end
+
       def initialize(memory, commands: nil)
         super(memory)
         @commands = commands || Agentf::Commands::SecurityScanner.new

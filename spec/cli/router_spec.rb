@@ -71,6 +71,12 @@ RSpec.describe Agentf::CLI::Router do
         .to_stdout
     end
 
+    it "dispatches 'architecture help' to Architecture CLI" do
+      expect { router.run(["architecture", "help"]) }
+        .to output(include("Usage: agentf architecture"))
+        .to_stdout
+    end
+
     it "fails metrics command when metrics are disabled" do
       Agentf.config.metrics_enabled = false
 

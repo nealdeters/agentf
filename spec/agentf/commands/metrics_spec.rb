@@ -71,6 +71,8 @@ RSpec.describe Agentf::Commands::Metrics do
       expect(summary).to have_key("completion_rate")
       expect(summary).to have_key("approval_rate")
       expect(summary).to have_key("security_issue_rate")
+      expect(summary).to have_key("contract_adherence_rate")
+      expect(summary).to have_key("policy_violation_rate")
       expect(summary["providers"]).to have_key("OPENCODE")
       expect(summary["providers"]).to have_key("COPILOT")
     end

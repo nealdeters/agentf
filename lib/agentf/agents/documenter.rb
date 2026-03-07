@@ -26,6 +26,16 @@ module Agentf
         MEMORY_CONCEPTS
       end
 
+      def self.policy_boundaries
+        {
+          "always" => ["Summarize recent successes and pitfalls"],
+          "ask_first" => ["Publishing docs to external destinations"],
+          "never" => ["Leak sensitive context in summaries"],
+          "required_inputs" => [],
+          "required_outputs" => ["successes", "pitfalls", "total_memories"]
+        }
+      end
+
       def sync_docs(project_name)
         log "Syncing documentation"
 

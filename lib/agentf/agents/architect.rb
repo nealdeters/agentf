@@ -26,6 +26,16 @@ module Agentf
         MEMORY_CONCEPTS
       end
 
+      def self.policy_boundaries
+        {
+          "always" => ["Capture constraints before decomposition", "Use recent memories and pitfalls in planning"],
+          "ask_first" => ["Changing architectural style from project defaults"],
+          "never" => ["Skip task decomposition for non-trivial workflows"],
+          "required_inputs" => [],
+          "required_outputs" => ["subtasks", "context"]
+        }
+      end
+
       def plan_task(task)
         log "Planning: #{task}"
 

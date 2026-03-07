@@ -27,6 +27,16 @@ module Agentf
         MEMORY_CONCEPTS
       end
 
+      def self.policy_boundaries
+        {
+          "always" => ["Return generated component details", "Persist successful implementation pattern"],
+          "ask_first" => ["Changing primary UI framework"],
+          "never" => ["Return empty generated code for successful design task"],
+          "required_inputs" => [],
+          "required_outputs" => ["component", "generated_code"]
+        }
+      end
+
       def initialize(memory, commands: nil)
         super(memory)
         @commands = commands || Agentf::Commands::Designer.new

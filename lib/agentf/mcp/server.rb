@@ -21,6 +21,7 @@ module Agentf
         code_grep
         code_tree
         code_related_files
+        architecture_analyze_layers
         memory_recent
         memory_search
         memory_add_lesson
@@ -38,6 +39,7 @@ module Agentf
 
       def initialize(explorer: nil, reviewer: nil, memory: nil, env: ENV)
         @explorer = explorer || Agentf::Commands::Explorer.new
+        @architecture = Agentf::Commands::Architecture.new
         @reviewer = reviewer || Agentf::Commands::MemoryReviewer.new
         @memory   = memory   || Agentf::Memory::RedisMemory.new
         @guardrails = build_guardrails(env)
@@ -120,6 +122,7 @@ module Agentf
         s = ::MCP::Server.new(name: "agentf", version: Agentf::VERSION)
         register_code_tools(s)
         register_memory_tools(s)
+        register_architecture_tools(s)
         s
       end
 
@@ -268,6 +271,29 @@ module Agentf
               code_snippet: ""
             )
             JSON.generate(id: id, type: "pitfall", status: "stored")
+          end
+        end
+      end
+
+      def register_architecture_tools(s)
+        architecture = @architecture
+        mcp_server = self
+
+        s.tool("architecture_analyze_layers") do
+          description "Analyze architecture layers, review violations, or create gradual adoption plans."
+          argument :mode, String, required: false, description: "analyze|review|gradual"
+          argument :limit, Integer, required: false, description: "Maximum violations to return for review mode"
+          argument :goal, String, required: false, description: "Adoption goal for gradual mode"
+          call do |args|
+            mcp_server.send(:guard!, "architecture_analyze_layers", **args)
+            case (args[:mode] || "analyze").to_s
+            when "review"
+              JSON.generate(architecture.review_layer_violations(limit: args[:limit] || 20))
+            when "gradual"
+              JSON.generate(architecture.plan_gradual_adoption(goal: args[:goal] || "improve architecture boundaries"))
+            else
+              JSON.generate(architecture.analyze_layers)
+            end
           end
         end
       end

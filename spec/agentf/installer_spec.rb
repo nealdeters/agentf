@@ -32,6 +32,7 @@ RSpec.describe Agentf::Installer do
       expect(File).to exist(command_path)
       expect(File.read(agent_path)).to include("## Memory Integration")
       expect(File.read(agent_path)).to include("## Memory Actions")
+      expect(File.read(agent_path)).to include("## Policy Boundaries")
       expect(File.read(agent_path)).to include("agentf memory recent -n 10")
       expect(File.read(agent_path)).to include("get_recent_memories")
     end

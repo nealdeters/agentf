@@ -27,6 +27,16 @@ module Agentf
         MEMORY_CONCEPTS
       end
 
+      def self.policy_boundaries
+        {
+          "always" => ["Produce framework-aware tests", "Verify red/green state when TDD enabled"],
+          "ask_first" => ["Changing test framework conventions"],
+          "never" => ["Mark passing when command output is uncertain"],
+          "required_inputs" => [],
+          "required_outputs" => ["test_file"]
+        }
+      end
+
       def initialize(memory, commands: nil)
         super(memory)
         @commands = commands || Agentf::Commands::Tester.new

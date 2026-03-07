@@ -27,6 +27,16 @@ module Agentf
         MEMORY_CONCEPTS
       end
 
+      def self.policy_boundaries
+        {
+          "always" => ["Return analysis with root causes and suggested fix", "Persist debugging lesson"],
+          "ask_first" => ["Applying speculative fixes without reproducible error"],
+          "never" => ["Discard stack trace context when available"],
+          "required_inputs" => [],
+          "required_outputs" => ["analysis"]
+        }
+      end
+
       def initialize(memory, commands: nil)
         super(memory)
         @commands = commands || Agentf::Commands::Debugger.new

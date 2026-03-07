@@ -8,6 +8,7 @@ require_relative "commands/designer"
 require_relative "commands/security_scanner"
 require_relative "commands/memory_reviewer"
 require_relative "commands/metrics"
+require_relative "commands/architecture"
 
 module Agentf
   module Commands

@@ -27,6 +27,16 @@ module Agentf
         MEMORY_CONCEPTS
       end
 
+      def self.policy_boundaries
+        {
+          "always" => ["Return concrete file evidence", "Persist exploration breadcrumbs"],
+          "ask_first" => ["Scanning outside configured base path"],
+          "never" => ["Mutate project files during exploration"],
+          "required_inputs" => [],
+          "required_outputs" => ["files", "context_gathered"]
+        }
+      end
+
       def initialize(memory, commands: nil)
         super(memory)
         @commands = commands || Agentf::Commands::Explorer.new

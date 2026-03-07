@@ -4,6 +4,12 @@ module Agentf
   module Service
     module Providers
       class Base
+        attr_reader :pack
+
+        def initialize(pack: "generic")
+          @pack = pack.to_s.downcase
+        end
+
         def name
           self.class.name.split("::").last.upcase
         end
@@ -12,13 +18,14 @@ module Agentf
           logger&.call("[#{name}] Analyzing task: #{task}")
 
           workflow_type = classify_task(task)
-          agents_needed = workflow_templates.fetch(workflow_type)
+          agents_needed = pack_workflow_templates.fetch(workflow_type) { workflow_templates.fetch(workflow_type) }
 
           logger&.call("[#{name}] Workflow type: #{workflow_type}")
           logger&.call("[#{name}] Agents needed: #{agents_needed.join(', ')}")
 
           {
             "provider" => name,
+            "pack" => @pack,
             "task" => task,
             "context" => context,
             "workflow_type" => workflow_type,
@@ -41,6 +48,10 @@ module Agentf
 
         def workflow_templates
           raise NotImplementedError, "#{self.class} must implement #workflow_templates"
+        end
+
+        def pack_workflow_templates
+          Agentf::Packs.fetch(@pack).fetch("workflow_templates")
         end
 
         def execute_agent(agent_name:, task:, context:, agents:, commands:, logger: nil)

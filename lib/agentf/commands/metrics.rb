@@ -62,8 +62,12 @@ module Agentf
           "failure_rate" => ratio(failed, total),
           "security_issue_rate" => ratio(security_issue_runs, total),
           "avg_agents_executed" => average(records.map { |m| m["agents_executed"].to_i }),
+          "contract_adherence_rate" => ratio(records.count { |m| m["contract_blocked"] != true }, total),
+          "contract_blocked_runs" => records.count { |m| m["contract_blocked"] == true },
+          "policy_violation_rate" => ratio(records.count { |m| m["policy_violation_count"].to_i > 0 }, total),
           "providers" => provider_breakdown(records),
-          "workflow_types" => workflow_breakdown(records)
+          "workflow_types" => workflow_breakdown(records),
+          "top_contract_violations" => top_contract_violations(records)
         }
       rescue StandardError => e
         { "error" => e.message }
@@ -98,14 +102,23 @@ module Agentf
 
         {
           "provider" => workflow_state["provider"],
+          "pack" => workflow_state["pack"],
           "workflow_type" => workflow_state["workflow_type"],
           "status" => status,
           "approved" => reviewer_approved?(results),
           "agents_executed" => Array(workflow_state["completed_agents"]).length,
           "error_count" => results.count { |entry| entry.dig("result", "error") },
           "security_issues" => security_issue_count(results),
+          "contract_blocked" => workflow_state.dig("workflow_contract", "blocked") == true,
+          "contract_violations" => collect_contract_violations(workflow_state),
+          "policy_violation_count" => Array(workflow_state["policy_violations"]).length,
           "task" => workflow_state["task"].to_s
         }
+      end
+
+      def collect_contract_violations(workflow_state)
+        Array(workflow_state.dig("workflow_contract", "events"))
+          .flat_map { |event| Array(event["violations"]).map { |v| v["code"] } }
       end
 
       def infer_status(results)
@@ -142,12 +155,16 @@ module Agentf
       def metric_context(metrics)
         {
           "provider" => metrics["provider"],
+          "pack" => metrics["pack"],
           "workflow_type" => metrics["workflow_type"],
           "status" => metrics["status"],
           "approved" => metrics["approved"],
           "agents_executed" => metrics["agents_executed"],
           "error_count" => metrics["error_count"],
           "security_issues" => metrics["security_issues"],
+          "contract_blocked" => metrics["contract_blocked"],
+          "contract_violations" => metrics["contract_violations"],
+          "policy_violation_count" => metrics["policy_violation_count"],
           "task" => metrics["task"]
         }.to_json
       end
@@ -158,6 +175,14 @@ module Agentf
           "provider:#{metrics['provider'].to_s.downcase}",
           "workflow:#{metrics['workflow_type']}"
         ]
+      end
+
+      def top_contract_violations(records)
+        counts = Hash.new(0)
+        records.each do |record|
+          Array(record["contract_violations"]).each { |code| counts[code] += 1 }
+        end
+        counts.sort_by { |(_code, count)| -count }.first(5).to_h
       end
 
       def metric_records(limit: 100)
@@ -190,8 +215,12 @@ module Agentf
           "failure_rate" => 0.0,
           "security_issue_rate" => 0.0,
           "avg_agents_executed" => 0.0,
+          "contract_adherence_rate" => 0.0,
+          "contract_blocked_runs" => 0,
+          "policy_violation_rate" => 0.0,
           "providers" => {},
-          "workflow_types" => {}
+          "workflow_types" => {},
+          "top_contract_violations" => {}
         }
       end
 
