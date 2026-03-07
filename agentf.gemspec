@@ -27,8 +27,8 @@ Gem::Specification.new do |spec|
 
   spec.add_runtime_dependency "redis", "~> 4.8"
   spec.add_runtime_dependency "dotenv", "~> 2.8"
-  spec.add_runtime_dependency "mcp-rb", "~> 0.3"
 
+  spec.add_development_dependency "rake"
   spec.add_development_dependency "rspec", "~> 3.12"
   spec.add_development_dependency "fakeredis", ">= 0.9.0"
 end

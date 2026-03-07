@@ -105,6 +105,8 @@ module Agentf
           return false
         end
 
+        migrate_old_files(root, provider) if @options[:force]
+
         action = installed_version ? "Updating #{installed_version} -> #{Agentf::VERSION}" : "Installing v#{Agentf::VERSION}"
         action = "Force reinstalling v#{Agentf::VERSION}" if @options[:force] && installed_version == Agentf::VERSION
         puts "#{provider} (#{shorten(root)}): #{action}"
@@ -126,6 +128,36 @@ module Agentf
         write_stamp(stamp_path, Agentf::VERSION)
         puts "  Stamp: #{Agentf::VERSION} -> #{shorten(stamp_path)}"
         true
+      end
+
+      def migrate_old_files(root, provider)
+        return unless provider == "opencode"
+
+        opencode_dir = File.join(root, ".opencode")
+        return unless Dir.exist?(opencode_dir)
+
+        old_files = [
+          File.join(opencode_dir, "tools", "agentf-tools.ts"),
+          File.join(opencode_dir, "agents", "WORKFLOW_ENGINE.md"),
+          File.join(opencode_dir, "memory", "REDIS_SCHEMA.md")
+        ]
+
+        old_agent_names = %w[EXPLORER ARCHITECT DESIGNER DEBUGGER REVIEWER TESTER DOCUMENTER SECURITY SPECIALIST]
+        old_files.concat(old_agent_names.map { |name| File.join(opencode_dir, "agents", "#{name}.md") })
+
+        old_command_names = %w[explorer tester metrics security_scanner memory_reviewer designer debugger architecture]
+        old_files.concat(old_command_names.map { |name| File.join(opencode_dir, "commands", "#{name}.md") })
+
+        removed_count = 0
+        old_files.each do |file|
+          next unless File.exist?(file)
+
+          File.delete(file)
+          puts "  REMOVED: #{shorten(file)}"
+          removed_count += 1
+        end
+
+        puts "  Migration: removed #{removed_count} old files" if removed_count > 0
       end
 
       def read_stamp(path)

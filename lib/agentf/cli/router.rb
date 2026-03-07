@@ -86,6 +86,7 @@ module Agentf
             AGENTF_WORKFLOW_CONTRACT_ENABLED=true|false   Enable/disable workflow contract checks
             AGENTF_WORKFLOW_CONTRACT_MODE=advisory|enforcing|off   Contract behavior mode
             AGENTF_DEFAULT_PACK=generic|rails_standard|rails_37signals|rails_feature_spec
+            AGENTF_GEM_PATH=/path/to/gem   Path to agentf gem (for OpenCode plugin binary resolution)
 
           Examples:
             agentf memory recent -n 5

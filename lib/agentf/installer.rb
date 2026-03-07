@@ -6,33 +6,35 @@ require "yaml"
 module Agentf
   class Installer
     READ_ACTIONS = {
-      "get_recent_memories" => "agentf memory recent -n 10",
-      "get_pitfalls" => "agentf memory pitfalls -n 10",
-      "get_lessons" => "agentf memory lessons -n 10",
-      "get_successes" => "agentf memory successes -n 10",
-      "get_intents" => "agentf memory intents",
-      "get_all_tags" => "agentf memory tags",
-      "get_by_tag" => "agentf memory by-tag <tag> -n 10",
-      "get_by_type" => "agentf memory by-type <type> -n 10",
-      "get_by_agent" => "agentf memory by-agent <agent> -n 10",
-      "search" => "agentf memory search \"<query>\" -n 10",
-      "get_summary" => "agentf memory summary"
+      "get_recent_memories" => { cli: "agentf memory recent -n 10", tool: "agentf_memory_recent" },
+      "get_pitfalls" => { cli: "agentf memory pitfalls -n 10", tool: "agentf_memory_recent" },
+      "get_lessons" => { cli: "agentf memory lessons -n 10", tool: "agentf_memory_recent" },
+      "get_successes" => { cli: "agentf memory successes -n 10", tool: "agentf_memory_recent" },
+      "get_intents" => { cli: "agentf memory intents", tool: "agentf_memory_recent" },
+      "get_all_tags" => { cli: "agentf memory tags", tool: "agentf_memory_recent" },
+      "get_by_tag" => { cli: "agentf memory by-tag <tag> -n 10", tool: "agentf_memory_search" },
+      "get_by_type" => { cli: "agentf memory by-type <type> -n 10", tool: "agentf_memory_search" },
+      "get_by_agent" => { cli: "agentf memory by-agent <agent> -n 10", tool: "agentf_memory_search" },
+      "search" => { cli: "agentf memory search \"<query>\" -n 10", tool: "agentf_memory_search" },
+      "get_summary" => { cli: "agentf memory summary", tool: "agentf_memory_recent" }
     }.freeze
 
     WRITE_ACTIONS = {
-      "store_lesson" => "agentf memory add-lesson \"<title>\" \"<description>\" --agent=<AGENT> --tags=learning",
-      "store_success" => "agentf memory add-success \"<title>\" \"<description>\" --agent=<AGENT> --tags=success",
-      "store_pitfall" => "agentf memory add-pitfall \"<title>\" \"<description>\" --agent=<AGENT> --tags=pitfall",
-      "store_business_intent" => "agentf memory add-business-intent \"<title>\" \"<description>\" --tags=strategy",
-      "store_feature_intent" => "agentf memory add-feature-intent \"<title>\" \"<description>\" --acceptance=\"<criteria>\""
+      "store_lesson" => { cli: "agentf memory add-lesson \"<title>\" \"<description>\" --agent=<AGENT> --tags=learning", tool: "agentf_memory_add_lesson" },
+      "store_success" => { cli: "agentf memory add-success \"<title>\" \"<description>\" --agent=<AGENT> --tags=success", tool: "agentf_memory_add_success" },
+      "store_pitfall" => { cli: "agentf memory add-pitfall \"<title>\" \"<description>\" --agent=<AGENT> --tags=pitfall", tool: "agentf_memory_add_pitfall" },
+      "store_business_intent" => { cli: "agentf memory add-business-intent \"<title>\" \"<description>\" --tags=strategy", tool: "agentf_memory_add_lesson" },
+      "store_feature_intent" => { cli: "agentf memory add-feature-intent \"<title>\" \"<description>\" --acceptance=\"<criteria>\"", tool: "agentf_memory_add_lesson" }
     }.freeze
 
     PROVIDER_LAYOUTS = {
       "opencode" => {
         "agents_dir" => ".opencode/agents",
         "commands_dir" => ".opencode/commands",
-        "agent_filename" => ->(klass) { "#{klass.typed_name}.md" },
-        "command_filename" => ->(manifest) { "#{manifest.fetch('name')}.md" }
+        "plugin_dir" => ".opencode/plugins",
+        "memory_dir" => ".opencode/memory",
+        "agent_filename" => ->(klass) { "agentf-#{klass.typed_name.downcase}.md" },
+        "command_filename" => ->(manifest) { "agentf-#{manifest.fetch('name')}.md" }
       },
       "copilot" => {
         "agents_dir" => ".github/agents",
@@ -114,16 +116,20 @@ module Agentf
     def write_opencode_helpers(root:)
       writes = []
       writes << write_manifest(
-        File.join(root, ".opencode/agents/WORKFLOW_ENGINE.md"),
+        File.join(root, ".opencode/agents/agentf-workflow-engine.md"),
         render_workflow_engine_manifest
       )
       writes << write_manifest(
-        File.join(root, ".opencode/tools/agentf-tools.ts"),
-        render_opencode_tools_wrapper
+        File.join(root, ".opencode/plugins/agentf-plugin.ts"),
+        render_opencode_plugin
       )
       writes << write_manifest(
-        File.join(root, ".opencode/memory/REDIS_SCHEMA.md"),
+        File.join(root, ".opencode/memory/agentf-redis-schema.md"),
         render_opencode_memory_schema
+      )
+      writes << write_manifest(
+        File.join(root, "opencode.json"),
+        render_opencode_json
       )
       writes
     end
@@ -171,7 +177,7 @@ module Agentf
         - Policy: #{klass.memory_concepts["policy"]}
 
         ## Memory Actions
-        #{memory_actions_for(klass).join("\n")}
+        #{memory_actions_for(klass, provider: provider).join("\n")}
 
         ## Policy Boundaries
         - Always: #{Array(klass.policy_boundaries["always"]).join("; ")}
@@ -184,7 +190,7 @@ module Agentf
       MARKDOWN
     end
 
-    def memory_actions_for(klass)
+    def memory_actions_for(klass, provider: "opencode")
       reads = Array(klass.memory_concepts["reads"]).map { |item| item.to_s.split("#").last }
       writes = Array(klass.memory_concepts["writes"]).map { |item| item.to_s.split("#").last }
 
@@ -193,18 +199,39 @@ module Agentf
       reads.each do |read_action|
         next unless READ_ACTIONS[read_action]
 
-        actions << "- Read: `#{READ_ACTIONS[read_action]}`"
+        action = format_action(READ_ACTIONS[read_action], "Read", provider)
+        actions << action if action
       end
 
       writes.each do |write_action|
         next unless WRITE_ACTIONS[write_action]
 
-        actions << "- Write: `#{WRITE_ACTIONS[write_action]}`"
+        action = format_action(WRITE_ACTIONS[write_action], "Write", provider, klass.typed_name)
+        actions << action if action
       end
 
-      actions << "- Read: `agentf memory recent -n 10`" if actions.none? { |a| a.start_with?("- Read:") }
-      actions << "- Write: `agentf memory add-lesson \"<title>\" \"<description>\" --agent=#{klass.typed_name}`" if actions.none? { |a| a.start_with?("- Write:") }
+      if actions.none? { |a| a.start_with?("- Read:") }
+        actions << "- Read: Use `agentf_memory_recent` tool"
+      end
+      if actions.none? { |a| a.start_with?("- Write:") }
+        actions << "- Write: Use `agentf_memory_add_lesson` tool"
+      end
+
       actions
+    end
+
+    def format_action(action_def, type, provider, agent_name = nil)
+      case provider
+      when "opencode"
+        tool_name = action_def[:tool]
+        "- #{type}: Use `#{tool_name}` tool"
+      when "copilot"
+        cli_cmd = action_def[:cli]
+        cli_cmd = cli_cmd.gsub("<AGENT>", agent_name) if agent_name
+        "- #{type}: `#{cli_cmd}`"
+      else
+        "- #{type}: `#{action_def[:cli]}`"
+      end
     end
 
     def render_command_manifest(manifest, provider:)
@@ -265,7 +292,7 @@ module Agentf
 
     def render_workflow_engine_manifest
       <<~MARKDOWN
-        # WORKFLOW_ENGINE Agent
+        # AGENTF-WORKFLOW-ENGINE Agent
 
         ## Role
 
@@ -299,22 +326,54 @@ module Agentf
       MARKDOWN
     end
 
-    def render_opencode_tools_wrapper
+    def render_opencode_plugin
       <<~TYPESCRIPT
         import { execFile } from "node:child_process";
         import { promisify } from "node:util";
         import path from "node:path";
-        import { tool } from "@opencode-ai/plugin/tool";
+        import { type Plugin, tool } from "@opencode-ai/plugin/tool";
+        import fs from "node:fs";
 
         const execFileAsync = promisify(execFile);
 
-        async function runAgentfCli(directory: string, subcommand: string, command: string, args: string[]) {
+        async function resolveAgentfBinary(directory: string): Promise<string> {
+          const gemPath = process.env.AGENTF_GEM_PATH;
+          if (gemPath) {
+            const binaryPath = path.join(gemPath, "bin", "agentf");
+            if (fs.existsSync(binaryPath)) {
+              return binaryPath;
+            }
+          }
+
           const projectRoot = path.resolve(directory);
-          const fullPath = path.join(projectRoot, "bin/agentf");
-          const commandArgs = ["exec", "ruby", fullPath, subcommand, command, ...args, "--json"];
+          const projectBinary = path.join(projectRoot, "bin", "agentf");
+          if (fs.existsSync(projectBinary)) {
+            return projectBinary;
+          }
+
+          try {
+            const { stdout } = await execFileAsync("command", ["-v", "agentf"], { shell: true });
+            const whichPath = stdout.toString().trim();
+            if (whichPath && fs.existsSync(whichPath)) {
+              return whichPath;
+            }
+          } catch {
+            // command -v failed
+          }
+
+          throw new Error(
+            "agentf binary not found. Set AGENTF_GEM_PATH environment variable to the path where agentf gem is installed, " +
+            "or ensure bin/agentf exists in your project root. " +
+            "Example: AGENTF_GEM_PATH=$(bundle show agentf) opencode run \"your task\""
+          );
+        }
+
+        async function runAgentfCli(directory: string, subcommand: string, command: string, args: string[]) {
+          const binaryPath = await resolveAgentfBinary(directory);
+          const commandArgs = ["exec", "ruby", binaryPath, subcommand, command, ...args, "--json"];
 
           const { stdout } = await execFileAsync("bundle", commandArgs, {
-            cwd: projectRoot,
+            cwd: path.resolve(directory),
             env: process.env,
             maxBuffer: 1024 * 1024 * 5,
           });
@@ -323,10 +382,10 @@ module Agentf
           return text || "{}";
         }
 
-        export const AgentfToolsPlugin = async () => {
+        export const agentfPlugin: Plugin = async () => {
           return {
             tool: {
-              code_glob: tool({
+              agentf_code_glob: tool({
                 description: "Find files using project glob patterns via Agentf code CLI.",
                 args: {
                   pattern: tool.schema.string().describe("Glob pattern, example: lib/**/*.rb"),
@@ -341,7 +400,7 @@ module Agentf
                   return runAgentfCli(context.directory, "code", "glob", [args.pattern, ...commandArgs]);
                 },
               }),
-              code_grep: tool({
+              agentf_code_grep: tool({
                 description: "Search file contents via Agentf code CLI.",
                 args: {
                   pattern: tool.schema.string().describe("Regex/text to search"),
@@ -356,7 +415,7 @@ module Agentf
                   return runAgentfCli(context.directory, "code", "grep", [args.pattern, ...commandArgs]);
                 },
               }),
-              code_tree: tool({
+              agentf_code_tree: tool({
                 description: "Get directory tree data via Agentf code CLI.",
                 args: {
                   depth: tool.schema.number().int().min(1).max(10).optional().describe("Max traversal depth"),
@@ -366,7 +425,7 @@ module Agentf
                   return runAgentfCli(context.directory, "code", "tree", [`--depth=${depth}`]);
                 },
               }),
-              code_related_files: tool({
+              agentf_code_related_files: tool({
                 description: "Find import and related file hints for a target file.",
                 args: {
                   targetFile: tool.schema.string().describe("Workspace-relative file path"),
@@ -375,7 +434,7 @@ module Agentf
                   return runAgentfCli(context.directory, "code", "related", [args.targetFile]);
                 },
               }),
-              memory_recent: tool({
+              agentf_memory_recent: tool({
                 description: "Get recent Agentf memories from Redis.",
                 args: {
                   limit: tool.schema.number().int().min(1).max(100).optional().describe("How many memories to return"),
@@ -385,7 +444,7 @@ module Agentf
                   return runAgentfCli(context.directory, "memory", "recent", ["-n", String(limit)]);
                 },
               }),
-              memory_search: tool({
+              agentf_memory_search: tool({
                 description: "Search Agentf memories by keyword.",
                 args: {
                   query: tool.schema.string().describe("Search query"),
@@ -396,7 +455,7 @@ module Agentf
                   return runAgentfCli(context.directory, "memory", "search", [args.query, "-n", String(limit)]);
                 },
               }),
-              memory_add_lesson: tool({
+              agentf_memory_add_lesson: tool({
                 description: "Store a lesson memory in Redis.",
                 args: {
                   title: tool.schema.string(),
@@ -414,7 +473,7 @@ module Agentf
                   return runAgentfCli(context.directory, "memory", "add-lesson", commandArgs);
                 },
               }),
-              memory_add_success: tool({
+              agentf_memory_add_success: tool({
                 description: "Store a success memory in Redis.",
                 args: {
                   title: tool.schema.string(),
@@ -432,7 +491,7 @@ module Agentf
                   return runAgentfCli(context.directory, "memory", "add-success", commandArgs);
                 },
               }),
-              memory_add_pitfall: tool({
+              agentf_memory_add_pitfall: tool({
                 description: "Store a pitfall memory in Redis.",
                 args: {
                   title: tool.schema.string(),
@@ -454,6 +513,15 @@ module Agentf
           };
         };
       TYPESCRIPT
+    end
+
+    def render_opencode_json
+      <<~JSON
+        {
+          "$schema": "https://opencode.ai/config.json",
+          "plugin": ["./opencode/plugins/agentf-plugin"]
+        }
+      JSON
     end
 
     def render_opencode_memory_schema

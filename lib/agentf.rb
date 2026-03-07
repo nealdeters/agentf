@@ -14,7 +14,7 @@ module Agentf
   class Config
     attr_reader :redis_url
     attr_accessor :project_name, :base_path, :metrics_enabled, :workflow_contract_enabled,
-                  :workflow_contract_mode, :default_pack
+                  :workflow_contract_mode, :default_pack, :gem_path
 
     def initialize
       @redis_url = normalize_redis_url(ENV.fetch("REDIS_URL", "redis://localhost:6379"))
@@ -29,6 +29,7 @@ module Agentf
         ENV.fetch("AGENTF_WORKFLOW_CONTRACT_MODE", "advisory")
       )
       @default_pack = ENV.fetch("AGENTF_DEFAULT_PACK", "generic").to_s.strip.downcase
+      @gem_path = ENV.fetch("AGENTF_GEM_PATH", nil)
     end
 
     def redis_url=(value)

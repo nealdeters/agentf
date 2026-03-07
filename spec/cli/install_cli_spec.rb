@@ -30,8 +30,8 @@ RSpec.describe Agentf::CLI::Install do
       end
 
       expect(output).to include("Completed")
-      expect(File).to exist(File.join(local_root, ".opencode/agents/ARCHITECT.md"))
-      expect(File).to exist(File.join(local_root, ".opencode/commands/debugger.md"))
+      expect(File).to exist(File.join(local_root, ".opencode/agents/agentf-architect.md"))
+      expect(File).to exist(File.join(local_root, ".opencode/commands/agentf-debugger.md"))
     end
   end
 
@@ -49,7 +49,7 @@ RSpec.describe Agentf::CLI::Install do
       end
 
       expect(output).to include("PLANNED")
-      expect(File).not_to exist(File.join(local_root, ".opencode/agents/ARCHITECT.md"))
+      expect(File).not_to exist(File.join(local_root, ".opencode/agents/agentf-architect.md"))
     end
   end
 
@@ -66,7 +66,7 @@ RSpec.describe Agentf::CLI::Install do
       end
 
       expect(output).to include("Completed")
-      expect(File).to exist(File.join(local_root, ".opencode/agents/ARCHITECT.md"))
+      expect(File).to exist(File.join(local_root, ".opencode/agents/agentf-architect.md"))
       expect(File).to exist(File.join(local_root, ".github/agents/architect.agent.md"))
     end
   end

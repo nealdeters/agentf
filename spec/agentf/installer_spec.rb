@@ -25,15 +25,15 @@ RSpec.describe Agentf::Installer do
 
       expect(results).not_to be_empty
 
-      agent_path = File.join(local_root, ".opencode/agents/ARCHITECT.md")
-      command_path = File.join(local_root, ".opencode/commands/debugger.md")
+      agent_path = File.join(local_root, ".opencode/agents/agentf-architect.md")
+      command_path = File.join(local_root, ".opencode/commands/agentf-debugger.md")
 
       expect(File).to exist(agent_path)
       expect(File).to exist(command_path)
       expect(File.read(agent_path)).to include("## Memory Integration")
       expect(File.read(agent_path)).to include("## Memory Actions")
       expect(File.read(agent_path)).to include("## Policy Boundaries")
-      expect(File.read(agent_path)).to include("agentf memory recent -n 10")
+      expect(File.read(agent_path)).to include("agentf_memory_recent")
       expect(File.read(agent_path)).to include("get_recent_memories")
     end
 
@@ -67,16 +67,21 @@ RSpec.describe Agentf::Installer do
         only_commands: ["debugger"]
       )
 
-      workflow_agent = File.join(local_root, ".opencode/agents/WORKFLOW_ENGINE.md")
-      tools_wrapper = File.join(local_root, ".opencode/tools/agentf-tools.ts")
-      memory_schema = File.join(local_root, ".opencode/memory/REDIS_SCHEMA.md")
+      workflow_agent = File.join(local_root, ".opencode/agents/agentf-workflow-engine.md")
+      plugin = File.join(local_root, ".opencode/plugins/agentf-plugin.ts")
+      memory_schema = File.join(local_root, ".opencode/memory/agentf-redis-schema.md")
+      opencode_json = File.join(local_root, "opencode.json")
 
       expect(File).to exist(workflow_agent)
-      expect(File).to exist(tools_wrapper)
+      expect(File).to exist(plugin)
       expect(File).to exist(memory_schema)
-      expect(File.read(workflow_agent)).to include("# WORKFLOW_ENGINE Agent")
-      expect(File.read(tools_wrapper)).to include("export const AgentfToolsPlugin")
+      expect(File).to exist(opencode_json)
+      expect(File.read(workflow_agent)).to include("# AGENTF-WORKFLOW-ENGINE Agent")
+      expect(File.read(plugin)).to include("export const agentfPlugin")
+      expect(File.read(plugin)).to include("AGENTF_GEM_PATH")
       expect(File.read(memory_schema)).to include("# Redis Memory Schema")
+      expect(File.read(opencode_json)).to include('"plugin"')
+      expect(File.read(opencode_json)).to include("agentf-plugin")
     end
 
     it "supports dry-run mode without writing files" do
@@ -90,10 +95,11 @@ RSpec.describe Agentf::Installer do
       )
 
       expect(results).to all(include("status" => "planned"))
-      expect(File).not_to exist(File.join(local_root, ".opencode/agents/ARCHITECT.md"))
-      expect(File).not_to exist(File.join(local_root, ".opencode/agents/WORKFLOW_ENGINE.md"))
-      expect(File).not_to exist(File.join(local_root, ".opencode/tools/agentf-tools.ts"))
-      expect(File).not_to exist(File.join(local_root, ".opencode/memory/REDIS_SCHEMA.md"))
+      expect(File).not_to exist(File.join(local_root, ".opencode/agents/agentf-architect.md"))
+      expect(File).not_to exist(File.join(local_root, ".opencode/agents/agentf-workflow-engine.md"))
+      expect(File).not_to exist(File.join(local_root, ".opencode/plugins/agentf-plugin.ts"))
+      expect(File).not_to exist(File.join(local_root, ".opencode/memory/agentf-redis-schema.md"))
+      expect(File).not_to exist(File.join(local_root, "opencode.json"))
     end
 
     it "raises for unknown providers" do
@@ -114,12 +120,12 @@ RSpec.describe Agentf::Installer do
         only_commands: []
       )
 
-      agent_path = File.join(local_root, ".opencode/agents/ARCHITECT.md")
+      agent_path = File.join(local_root, ".opencode/agents/agentf-architect.md")
       content = File.read(agent_path)
 
       # Architect reads get_recent_memories and get_pitfalls
-      expect(content).to include("agentf memory recent")
-      expect(content).to include("agentf memory pitfalls")
+      expect(content).to include("agentf_memory_recent")
+      expect(content).to include("agentf_memory_recent")
     end
 
     it "includes read fallback for agents with no explicit reads" do
@@ -132,12 +138,12 @@ RSpec.describe Agentf::Installer do
         only_commands: []
       )
 
-      agent_path = File.join(local_root, ".opencode/agents/SPECIALIST.md")
+      agent_path = File.join(local_root, ".opencode/agents/agentf-specialist.md")
       content = File.read(agent_path)
 
       # Specialist has no reads, so fallback should add a read action
       expect(content).to include("Read:")
-      expect(content).to include("agentf memory recent")
+      expect(content).to include("agentf_memory_recent")
     end
   end
 end
