@@ -205,6 +205,52 @@ RSpec.describe Agentf::Memory::RedisMemory do
     end
   end
 
+  describe "deletion APIs" do
+    it "deletes memory by id in current project" do
+      memory = described_class.new(project: project)
+      id = memory.store_lesson(title: "L1", description: "d", tags: [])
+
+      result = memory.delete_memory_by_id(id: id, scope: "project")
+      expect(result["deleted_count"]).to be >= 1
+
+      recent = memory.get_recent_memories(limit: 20)
+      expect(recent.map { |m| m["id"] }).not_to include(id)
+    end
+
+    it "dry-runs delete all without removing records" do
+      memory = described_class.new(project: project)
+      memory.store_lesson(title: "L1", description: "d", tags: [])
+
+      result = memory.delete_all(scope: "project", dry_run: true)
+      expect(result["dry_run"]).to be(true)
+      expect(result["deleted_count"]).to eq(0)
+      expect(result["candidate_count"]).to be >= 1
+
+      expect(memory.get_recent_memories(limit: 20)).not_to be_empty
+    end
+
+    it "deletes last N memories" do
+      memory = described_class.new(project: project)
+      3.times { |i| memory.store_lesson(title: "L#{i}", description: "d", tags: []) }
+
+      result = memory.delete_recent(limit: 2, scope: "project")
+      expect(result["deleted_count"]).to be >= 2
+      expect(result["deleted_ids"].length).to eq(2)
+    end
+
+    it "filters delete all by type" do
+      memory = described_class.new(project: project)
+      memory.store_lesson(title: "L", description: "d", tags: [])
+      memory.store_pitfall(title: "P", description: "d", tags: [])
+
+      result = memory.delete_all(scope: "project", type: "lesson")
+      expect(result["deleted_count"]).to be >= 1
+
+      remaining = memory.get_recent_memories(limit: 20)
+      expect(remaining.map { |m| m["type"] }).to include("pitfall")
+    end
+  end
+
   describe ".memory" do
     it "creates a new RedisMemory instance" do
       mem = Agentf::Memory.memory(project: "custom-project")

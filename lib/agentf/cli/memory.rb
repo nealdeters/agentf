@@ -54,6 +54,8 @@ module Agentf
           list_tags
         when "search"
           search_memories(args)
+        when "delete"
+          delete_memories(args)
         when "neighbors"
           neighbors(args)
         when "subgraph"
@@ -315,6 +317,65 @@ module Agentf
         output_graph(result)
       end
 
+      def delete_memories(args)
+        mode = args.shift.to_s
+        case mode
+        when "id"
+          delete_by_id(args)
+        when "last"
+          delete_last(args)
+        when "all"
+          delete_all(args)
+        else
+          $stderr.puts "Error: delete requires one of: id|last|all"
+          exit 1
+        end
+      end
+
+      def delete_by_id(args)
+        id = args.shift.to_s
+        if id.empty?
+          $stderr.puts "Error: delete id requires a memory id"
+          exit 1
+        end
+
+        scope = parse_scope_option(args)
+        dry_run = parse_boolean_flag(args, "--dry-run")
+        result = @memory.delete_memory_by_id(id: id, scope: scope, dry_run: dry_run)
+        output_delete(result)
+      end
+
+      def delete_last(args)
+        limit = extract_limit(args)
+        if limit <= 0
+          $stderr.puts "Error: delete last requires -n with value > 0"
+          exit 1
+        end
+
+        scope = parse_scope_option(args)
+        type = parse_single_option(args, "--type=")
+        agent = parse_single_option(args, "--agent=")
+        dry_run = parse_boolean_flag(args, "--dry-run")
+        result = @memory.delete_recent(limit: limit, scope: scope, type: type, agent: agent, dry_run: dry_run)
+        output_delete(result)
+      end
+
+      def delete_all(args)
+        scope = parse_scope_option(args)
+        type = parse_single_option(args, "--type=")
+        agent = parse_single_option(args, "--agent=")
+        dry_run = parse_boolean_flag(args, "--dry-run")
+        confirmed = parse_boolean_flag(args, "--yes")
+
+        if !dry_run && !confirmed
+          $stderr.puts "Error: delete all requires --yes (or use --dry-run)"
+          exit 1
+        end
+
+        result = @memory.delete_all(scope: scope, type: type, agent: agent, dry_run: dry_run)
+        output_delete(result)
+      end
+
       def subgraph(args)
         seeds = args.shift.to_s.split(",").map(&:strip).reject(&:empty?)
         if seeds.empty?
@@ -361,6 +422,43 @@ module Agentf
           puts format_memory(mem)
           puts "-" * 40
         end
+      end
+
+      def output_delete(result)
+        if result["error"]
+          if @json_output
+            puts JSON.generate({ "error" => result["error"] })
+          else
+            $stderr.puts "Error: #{result['error']}"
+          end
+          exit 1
+        end
+
+        if @json_output
+          puts JSON.generate(result)
+          return
+        end
+
+        action = result["dry_run"] ? "Planned" : "Deleted"
+        puts "#{action} #{result['deleted_count']} keys (candidates: #{result['candidate_count']})"
+        puts "Mode: #{result['mode']} | Scope: #{result['scope']}"
+        filters = result["filters"] || {}
+        puts "Filters: type=#{filters['type'] || 'any'}, agent=#{filters['agent'] || 'any'}"
+        ids = Array(result["deleted_ids"])
+        puts "Memory ids: #{ids.join(', ')}" unless ids.empty?
+      end
+
+      def parse_scope_option(args)
+        scope = parse_single_option(args, "--scope=") || "project"
+        unless %w[project all].include?(scope)
+          $stderr.puts "Error: --scope must be project or all"
+          exit 1
+        end
+        scope
+      end
+
+      def parse_boolean_flag(args, flag)
+        !args.delete(flag).nil?
       end
 
       def output_graph(result)
@@ -420,6 +518,9 @@ module Agentf
             add-pitfall               Store pitfall memory
             tags                      List all unique tags
             search <query>            Search memories by keyword
+            delete id <memory_id>     Delete one memory and related edges
+            delete last -n <count>    Delete most recent memories
+            delete all                Delete memories and graph/task keys
             neighbors <id>            Traverse graph edges from a memory id
             subgraph <ids>            Build graph from comma-separated seed ids
             summary, stats            Show summary statistics
@@ -440,6 +541,9 @@ module Agentf
             agentf memory add-lesson "Refactor strategy" "Extracted adapter seam" --agent=PLANNER --tags=architecture
             agentf memory add-success "Provider install works" "Installed copilot + opencode manifests" --agent=ENGINEER
             agentf memory search "react"
+            agentf memory delete id episode_abcd
+            agentf memory delete last -n 10 --scope=project
+            agentf memory delete all --scope=all --yes
             agentf memory neighbors episode_abcd --depth=2
             agentf memory by-tag "performance"
             agentf memory summary

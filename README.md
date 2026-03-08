@@ -86,7 +86,7 @@ Run `agentf <command> help` for detailed help on any subcommand. The CLI uses th
 
 ### Memory Commands
 
-Available memory subcommands include `recent`, `pitfalls`, `lessons`, `successes`, `intents`, `business-intents`, `feature-intents`, `add-business-intent`, `add-feature-intent`, `add-lesson`, `add-success`, `add-pitfall`, `tags`, `search`, `summary`, `by-tag`, `by-agent`, and `by-type`.
+Available memory subcommands include `recent`, `pitfalls`, `lessons`, `successes`, `intents`, `business-intents`, `feature-intents`, `add-business-intent`, `add-feature-intent`, `add-lesson`, `add-success`, `add-pitfall`, `tags`, `search`, `summary`, `by-tag`, `by-agent`, `by-type`, `delete id`, `delete last`, and `delete all`.
 
 ```bash
 # Add business intent to the shared brain
@@ -99,6 +99,18 @@ agentf memory add-feature-intent "Agent handoff" "Preserve context between steps
 agentf memory add-lesson "Adapter pattern" "Provider seam reduced coupling" --agent=PLANNER --tags=architecture
 agentf memory add-success "Install completed" "Installed opencode and copilot manifests" --agent=ENGINEER
 agentf memory add-pitfall "Provider mismatch" "Unknown provider caused failure" --agent=ORCHESTRATOR
+
+# Delete one memory id (+ related edges)
+agentf memory delete id episode_abcd
+
+# Delete last 10 memories in current project only
+agentf memory delete last -n 10 --scope=project
+
+# Dry-run global cleanup across all Agentf projects
+agentf memory delete all --scope=all --dry-run
+
+# Confirmed global cleanup
+agentf memory delete all --scope=all --yes
 ```
 
 ## Provider Adapters

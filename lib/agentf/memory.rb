@@ -312,6 +312,68 @@ module Agentf
         all_tags.to_a
       end
 
+      def delete_memory_by_id(id:, scope: "project", dry_run: false)
+        normalized_scope = normalize_scope(scope)
+        episode_id = normalize_episode_id(id)
+        episode_key = "episodic:#{episode_id}"
+        memory = load_episode(episode_key)
+
+        return delete_result(mode: "id", scope: normalized_scope, dry_run: dry_run, error: "Memory not found: #{id}") unless memory
+        if normalized_scope == "project" && memory["project"].to_s != @project.to_s
+          return delete_result(mode: "id", scope: normalized_scope, dry_run: dry_run, error: "Memory not in current project")
+        end
+
+        keys = [episode_key]
+        keys.concat(collect_related_edge_keys(episode_ids: [episode_id], scope: normalized_scope))
+        result = delete_keys(keys.uniq, dry_run: dry_run)
+        result.merge(
+          "mode" => "id",
+          "scope" => normalized_scope,
+          "deleted_ids" => [episode_id],
+          "filters" => {}
+        )
+      end
+
+      def delete_recent(limit: 10, scope: "project", type: nil, agent: nil, dry_run: false)
+        normalized_scope = normalize_scope(scope)
+        count = [limit.to_i, 0].max
+        return delete_result(mode: "last", scope: normalized_scope, dry_run: dry_run, deleted_ids: [], filters: { "type" => type, "agent" => agent }) if count.zero?
+
+        episodes = collect_episode_records(scope: normalized_scope, type: type, agent: agent)
+        selected = episodes.sort_by { |mem| -(mem["created_at"] || 0) }.first(count)
+        episode_ids = selected.map { |mem| mem["id"].to_s }
+        keys = selected.map { |mem| "episodic:#{mem['id']}" }
+        keys.concat(collect_related_edge_keys(episode_ids: episode_ids, scope: normalized_scope))
+        result = delete_keys(keys.uniq, dry_run: dry_run)
+        result.merge(
+          "mode" => "last",
+          "scope" => normalized_scope,
+          "deleted_ids" => episode_ids,
+          "filters" => { "type" => type, "agent" => agent }
+        )
+      end
+
+      def delete_all(scope: "project", type: nil, agent: nil, dry_run: false)
+        normalized_scope = normalize_scope(scope)
+        episodic_records = collect_episode_records(scope: normalized_scope, type: type, agent: agent)
+        episode_ids = episodic_records.map { |mem| mem["id"].to_s }
+        keys = episodic_records.map { |mem| "episodic:#{mem['id']}" }
+        keys.concat(collect_related_edge_keys(episode_ids: episode_ids, scope: normalized_scope))
+
+        if type.to_s.empty? && agent.to_s.empty?
+          keys.concat(collect_edge_keys(scope: normalized_scope))
+          keys.concat(collect_semantic_keys(scope: normalized_scope))
+        end
+
+        result = delete_keys(keys.uniq, dry_run: dry_run)
+        result.merge(
+          "mode" => "all",
+          "scope" => normalized_scope,
+          "deleted_ids" => episode_ids,
+          "filters" => { "type" => type, "agent" => agent }
+        )
+      end
+
       def store_edge(source_id:, target_id:, relation:, weight: 1.0, tags: [], agent: Agentf::AgentRoles::ORCHESTRATOR, metadata: {})
         edge_id = "edge_#{SecureRandom.hex(5)}"
         data = {
@@ -615,6 +677,134 @@ module Agentf
 
       def client_options
         { url: @redis_url }
+      end
+
+      def normalize_scope(scope)
+        value = scope.to_s.strip.downcase
+        return "all" if value == "all"
+
+        "project"
+      end
+
+      def normalize_episode_id(id)
+        value = id.to_s.strip
+        value = value.sub("episodic:", "") if value.start_with?("episodic:")
+        value
+      end
+
+      def collect_episode_records(scope:, type: nil, agent: nil)
+        memories = []
+        cursor = "0"
+        loop do
+          cursor, batch = @client.scan(cursor, match: "episodic:*", count: 100)
+          batch.each do |key|
+            mem = load_episode(key)
+            next unless mem.is_a?(Hash)
+            next if scope == "project" && mem["project"].to_s != @project.to_s
+            next unless type.to_s.empty? || mem["type"].to_s == type.to_s
+            next unless agent.to_s.empty? || mem["agent"].to_s == agent.to_s
+
+            memories << mem
+          end
+          break if cursor == "0"
+        end
+        memories
+      end
+
+      def collect_related_edge_keys(episode_ids:, scope:)
+        ids = episode_ids.map(&:to_s).reject(&:empty?).to_set
+        return [] if ids.empty?
+
+        keys = []
+        cursor = "0"
+        loop do
+          cursor, batch = @client.scan(cursor, match: "edge:*", count: 100)
+          batch.each do |key|
+            edge = load_episode(key)
+            next unless edge.is_a?(Hash)
+            next if scope == "project" && edge["project"].to_s != @project.to_s
+
+            source = edge["source_id"].to_s
+            target = edge["target_id"].to_s
+            keys << key if ids.include?(source) || ids.include?(target)
+          end
+          break if cursor == "0"
+        end
+        keys
+      end
+
+      def collect_edge_keys(scope:)
+        keys = []
+        cursor = "0"
+        loop do
+          cursor, batch = @client.scan(cursor, match: "edge:*", count: 100)
+          batch.each do |key|
+            if scope == "all"
+              keys << key
+              next
+            end
+
+            edge = load_episode(key)
+            keys << key if edge.is_a?(Hash) && edge["project"].to_s == @project.to_s
+          end
+          break if cursor == "0"
+        end
+        keys
+      end
+
+      def collect_semantic_keys(scope:)
+        keys = []
+        cursor = "0"
+        loop do
+          cursor, batch = @client.scan(cursor, match: "semantic:*", count: 100)
+          batch.each do |key|
+            if scope == "all"
+              keys << key
+              next
+            end
+
+            task = @client.hgetall(key)
+            keys << key if task.is_a?(Hash) && task["project"].to_s == @project.to_s
+          end
+          break if cursor == "0"
+        end
+        keys
+      end
+
+      def delete_keys(keys, dry_run:)
+        if dry_run
+          {
+            "dry_run" => true,
+            "candidate_count" => keys.length,
+            "deleted_count" => 0,
+            "deleted_keys" => [],
+            "planned_keys" => keys
+          }
+        else
+          deleted = keys.empty? ? 0 : @client.del(*keys)
+          {
+            "dry_run" => false,
+            "candidate_count" => keys.length,
+            "deleted_count" => deleted,
+            "deleted_keys" => keys,
+            "planned_keys" => []
+          }
+        end
+      end
+
+      def delete_result(mode:, scope:, dry_run:, deleted_ids: [], filters: {}, error: nil)
+        {
+          "mode" => mode,
+          "scope" => scope,
+          "dry_run" => dry_run,
+          "candidate_count" => 0,
+          "deleted_count" => 0,
+          "deleted_keys" => [],
+          "planned_keys" => [],
+          "deleted_ids" => deleted_ids,
+          "filters" => filters,
+          "error" => error
+        }
       end
 
       def persist_relationship_edges(episode_id:, related_task_id:, relationships:, metadata:, tags:, agent:)

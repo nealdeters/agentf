@@ -226,6 +226,63 @@ RSpec.describe Agentf::CLI::Memory do
     end
   end
 
+  describe "delete command" do
+    it "deletes by id" do
+      allow(memory).to receive(:delete_memory_by_id)
+        .with(id: "episode_1", scope: "project", dry_run: false)
+        .and_return(
+          "mode" => "id",
+          "scope" => "project",
+          "dry_run" => false,
+          "candidate_count" => 1,
+          "deleted_count" => 1,
+          "deleted_ids" => ["episode_1"],
+          "filters" => {}
+        )
+
+      expect { cli.run(["delete", "id", "episode_1"]) }
+        .to output(include("Deleted 1 keys")).to_stdout
+    end
+
+    it "deletes last N with filters" do
+      allow(memory).to receive(:delete_recent)
+        .with(limit: 5, scope: "project", type: "lesson", agent: "ENGINEER", dry_run: false)
+        .and_return(
+          "mode" => "last",
+          "scope" => "project",
+          "dry_run" => false,
+          "candidate_count" => 5,
+          "deleted_count" => 5,
+          "deleted_ids" => %w[a b c d e],
+          "filters" => { "type" => "lesson", "agent" => "ENGINEER" }
+        )
+
+      expect { cli.run(["delete", "last", "-n", "5", "--type=lesson", "--agent=ENGINEER"]) }
+        .to output(include("Deleted 5 keys")).to_stdout
+    end
+
+    it "requires --yes for delete all unless dry-run" do
+      expect { cli.run(["delete", "all"]) }.to raise_error(SystemExit)
+    end
+
+    it "supports delete all dry-run" do
+      allow(memory).to receive(:delete_all)
+        .with(scope: "all", type: nil, agent: nil, dry_run: true)
+        .and_return(
+          "mode" => "all",
+          "scope" => "all",
+          "dry_run" => true,
+          "candidate_count" => 10,
+          "deleted_count" => 0,
+          "deleted_ids" => [],
+          "filters" => { "type" => nil, "agent" => nil }
+        )
+
+      expect { cli.run(["delete", "all", "--scope=all", "--dry-run"]) }
+        .to output(include("Planned 0 keys")).to_stdout
+    end
+  end
+
   describe "by-type command" do
     it "accepts business_intent type (finding #11 fix)" do
       allow(reviewer).to receive(:get_by_type).with("business_intent", limit: 10).and_return(
