@@ -23,6 +23,22 @@ module Agentf
         COMMANDS
       end
 
+      def self.typed_name
+        Agentf::AgentRoles::SECURITY_REVIEWER
+      end
+
+      def self.when_to_use
+        "Use for security gating, prompt-injection checks, and secret leak detection."
+      end
+
+      def self.deliverables
+        ["Security findings", "Best-practice checklist", "Pass/warn outcome"]
+      end
+
+      def self.working_style
+        "Risk-focused with redaction-safe reporting."
+      end
+
       def self.memory_concepts
         MEMORY_CONCEPTS
       end

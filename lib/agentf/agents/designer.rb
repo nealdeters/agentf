@@ -23,6 +23,22 @@ module Agentf
         COMMANDS
       end
 
+      def self.typed_name
+        Agentf::AgentRoles::UI_ENGINEER
+      end
+
+      def self.when_to_use
+        "Use for transforming design specs into framework-ready UI components."
+      end
+
+      def self.deliverables
+        ["Component implementation", "Generated UI code", "Design-system alignment"]
+      end
+
+      def self.working_style
+        "Specification-driven with implementation-grade UI output."
+      end
+
       def self.memory_concepts
         MEMORY_CONCEPTS
       end

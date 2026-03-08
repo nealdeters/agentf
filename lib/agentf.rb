@@ -6,6 +6,7 @@ require "time"
 require "securerandom"
 require "pathname"
 require_relative "agentf/version"
+require_relative "agentf/agent_roles"
 
 module Agentf
   class Error < StandardError; end

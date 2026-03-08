@@ -14,6 +14,18 @@ module Agentf
         "Agent for #{typed_name.downcase}"
       end
 
+      def self.when_to_use
+        "Use when the workflow needs #{typed_name.downcase.tr('_', ' ')} expertise."
+      end
+
+      def self.deliverables
+        []
+      end
+
+      def self.working_style
+        "Structured, evidence-based, and outcome-oriented."
+      end
+
       def self.commands
         []
       end

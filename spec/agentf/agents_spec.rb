@@ -9,7 +9,7 @@ RSpec.describe Agentf::Agents::Base do
   end
 
   it "has a name based on class" do
-    expect(agent.name).to eq("ARCHITECT")
+    expect(agent.name).to eq("PLANNER")
   end
 
   it "has a log method" do
@@ -75,7 +75,7 @@ RSpec.describe Agentf::Agents::Specialist do
         description: "Successfully executed subtask 1",
         context: "Working on Main task",
         tags: ["implementation", "ruby"],
-        agent: "SPECIALIST"
+        agent: "ENGINEER"
       )
 
       specialist.execute(subtask)

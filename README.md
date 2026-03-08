@@ -96,9 +96,9 @@ agentf memory add-business-intent "Reliability" "Prioritize uptime" --tags=ops,p
 agentf memory add-feature-intent "Agent handoff" "Preserve context between steps" --acceptance="Carries prior state;Captures lessons"
 
 # Add runtime learnings directly
-agentf memory add-lesson "Adapter pattern" "Provider seam reduced coupling" --agent=ARCHITECT --tags=architecture
-agentf memory add-success "Install completed" "Installed opencode and copilot manifests" --agent=SPECIALIST
-agentf memory add-pitfall "Provider mismatch" "Unknown provider caused failure" --agent=WORKFLOW_ENGINE
+agentf memory add-lesson "Adapter pattern" "Provider seam reduced coupling" --agent=PLANNER --tags=architecture
+agentf memory add-success "Install completed" "Installed opencode and copilot manifests" --agent=ENGINEER
+agentf memory add-pitfall "Provider mismatch" "Unknown provider caused failure" --agent=ORCHESTRATOR
 ```
 
 ## Provider Adapters
@@ -243,16 +243,16 @@ lib/agentf/
 
 | Agent | Role |
 |-------|------|
-| **WORKFLOW_ENGINE** | Central coordinator - analyzes tasks, selects workflow |
-| **ARCHITECT** | Task planning, memory retrieval, decomposition |
-| **SPECIALIST** | Code execution and lesson learning |
+| **ORCHESTRATOR** | Central coordinator - analyzes tasks, selects workflow |
+| **PLANNER** | Task planning, memory retrieval, decomposition |
+| **ENGINEER** | Code execution and lesson learning |
 | **REVIEWER** | Quality assurance and regression checking |
-| **DOCUMENTER** | Syncs Redis memory with Markdown docs |
-| **EXPLORER** | Codebase exploration and file discovery |
-| **TESTER** | Test generation and execution |
-| **DEBUGGER** | Error analysis and diagnosis |
-| **DESIGNER** | Design specs to component implementation |
-| **SECURITY** | Lightweight secret scanning & prompt-injection detection |
+| **KNOWLEDGE_MANAGER** | Syncs Redis memory with Markdown docs |
+| **RESEARCHER** | Codebase exploration and file discovery |
+| **QA_TESTER** | Test generation and execution |
+| **INCIDENT_RESPONDER** | Error analysis and diagnosis |
+| **UI_ENGINEER** | Design specs to component implementation |
+| **SECURITY_REVIEWER** | Lightweight secret scanning & prompt-injection detection |
 
 ## Commands
 
@@ -348,25 +348,25 @@ OpenCode defaults:
 
 | Workflow | Agents | Use Case |
 |----------|--------|----------|
-| `feature` | ARCHITECT → EXPLORER → DESIGNER → SPECIALIST → TESTER → SECURITY → REVIEWER → DOCUMENTER | New features |
-| `bugfix` | ARCHITECT → DEBUGGER → SPECIALIST → TESTER → SECURITY → REVIEWER | Bug fixes |
-| `quick_fix` | SPECIALIST → SECURITY → REVIEWER | Small changes |
-| `exploration` | EXPLORER | Understanding code |
-| `refactor` | ARCHITECT → EXPLORER → SPECIALIST → TESTER → SECURITY → REVIEWER | Code improvements |
+| `feature` | PLANNER → RESEARCHER → UI_ENGINEER → ENGINEER → QA_TESTER → SECURITY_REVIEWER → REVIEWER → KNOWLEDGE_MANAGER | New features |
+| `bugfix` | PLANNER → INCIDENT_RESPONDER → ENGINEER → QA_TESTER → SECURITY_REVIEWER → REVIEWER | Bug fixes |
+| `quick_fix` | ENGINEER → SECURITY_REVIEWER → REVIEWER | Small changes |
+| `exploration` | RESEARCHER | Understanding code |
+| `refactor` | PLANNER → RESEARCHER → ENGINEER → QA_TESTER → SECURITY_REVIEWER → REVIEWER | Code improvements |
 
 Copilot defaults:
 
 | Workflow | Agents |
 |----------|--------|
-| `feature` | ARCHITECT → SPECIALIST → TESTER → SECURITY → REVIEWER → DOCUMENTER |
-| `bugfix` | DEBUGGER → SPECIALIST → TESTER → SECURITY → REVIEWER |
-| `quick_fix` | SPECIALIST → REVIEWER |
-| `exploration` | EXPLORER |
-| `refactor` | ARCHITECT → SPECIALIST → TESTER → REVIEWER |
+| `feature` | PLANNER → ENGINEER → QA_TESTER → SECURITY_REVIEWER → REVIEWER → KNOWLEDGE_MANAGER |
+| `bugfix` | INCIDENT_RESPONDER → ENGINEER → QA_TESTER → SECURITY_REVIEWER → REVIEWER |
+| `quick_fix` | ENGINEER → REVIEWER |
+| `exploration` | RESEARCHER |
+| `refactor` | PLANNER → ENGINEER → QA_TESTER → REVIEWER |
 
 ## Security & Secret Scanning
 
-Agentf ships with a dedicated **SECURITY** agent for lightweight secret scanning and prompt-injection detection. It is included by default in OpenCode `feature`, `bugfix`, `quick_fix`, and `refactor` workflows, and in Copilot `feature` and `bugfix` workflows. To build on that foundation:
+Agentf ships with a dedicated **SECURITY_REVIEWER** agent for lightweight secret scanning and prompt-injection detection. It is included by default in OpenCode `feature`, `bugfix`, `quick_fix`, and `refactor` workflows, and in Copilot `feature` and `bugfix` workflows. To build on that foundation:
 
 - **Pre-commit secret scanning:** add tools such as [Gitleaks](https://github.com/gitleaks/gitleaks) or [TruffleHog](https://github.com/trufflesecurity/trufflehog) to your local workflow (e.g., via pre-commit hooks). A starter `.pre-commit-config.yaml` is included with a Gitleaks hook enabled by default.
 - **Enable push protection:** turn on GitHub Secret Scanning Push Protection so leaked credentials are blocked before they land in the repository.

@@ -23,7 +23,9 @@ module Agentf
             { "name" => "get_by_type", "type" => "function" },
             { "name" => "get_by_agent", "type" => "function" },
             { "name" => "search", "type" => "function" },
-            { "name" => "get_summary", "type" => "function" }
+            { "name" => "get_summary", "type" => "function" },
+            { "name" => "neighbors", "type" => "function" },
+            { "name" => "subgraph", "type" => "function" }
           ]
         }
       end
@@ -150,6 +152,18 @@ module Agentf
         { "error" => e.message }
       end
 
+      def neighbors(node_id, relation: nil, depth: 1, limit: 50)
+        @memory.neighbors(node_id: node_id, relation: relation, depth: depth, limit: limit)
+      rescue => e
+        { "error" => e.message }
+      end
+
+      def subgraph(seed_ids:, depth: 2, relation_filters: nil, limit: 200)
+        @memory.subgraph(seed_ids: seed_ids, depth: depth, relation_filters: relation_filters, limit: limit)
+      rescue => e
+        { "error" => e.message }
+      end
+
       private
 
       def format_memories(memories)
@@ -169,6 +183,9 @@ module Agentf
           "code_snippet" => m["code_snippet"],
           "tags" => m["tags"],
           "agent" => m["agent"],
+          "metadata" => m["metadata"],
+          "entity_ids" => m["entity_ids"],
+          "relationships" => m["relationships"],
           "created_at" => format_time(m["created_at"]),
           "created_at_unix" => m["created_at"]
         }

@@ -35,7 +35,7 @@ module Agentf
           description: metric_description(metrics),
           context: metric_context(metrics),
           tags: metric_tags(metrics),
-          agent: "WORKFLOW_ENGINE",
+          agent: Agentf::AgentRoles::ORCHESTRATOR,
           code_snippet: ""
         )
 
@@ -128,12 +128,12 @@ module Agentf
       end
 
       def reviewer_approved?(results)
-        review = results.find { |entry| entry["agent"] == "REVIEWER" }
+        review = results.find { |entry| entry["agent"] == Agentf::AgentRoles::REVIEWER }
         review&.dig("result", "approved") == true
       end
 
       def security_issue_count(results)
-        security_result = results.find { |entry| entry["agent"] == "SECURITY" }
+        security_result = results.find { |entry| entry["agent"] == Agentf::AgentRoles::SECURITY_REVIEWER }
         issues = security_result&.dig("result", "issues")
         Array(issues).length
       end
@@ -190,12 +190,11 @@ module Agentf
 
         memories
           .select { |m| Array(m["tags"]).include?(WORKFLOW_METRICS_TAG) }
-          .filter_map do |m|
+          .map do |m|
             context = parse_context_json(m["context"])
-            next if context.nil?
-
             context
           end
+          .compact
       end
 
       def parse_context_json(value)

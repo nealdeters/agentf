@@ -61,18 +61,18 @@ module Agentf
           return { "error" => "Agent #{agent_name} not found" } unless agent
 
           result = case agent_name
-                   when "ARCHITECT"
-                     agent.plan_task(task)
-                   when "EXPLORER"
-                     query = context["explore_query"] || "*.rb"
-                     files = commands.fetch("explorer").glob(query)
-                     response = agent.explore(query)
-                     response["files"] = files
-                     response
-                   when "TESTER"
-                      source_file = context["source_file"] || "app/models/application_record.rb"
-                      tester_commands = commands.fetch("tester")
-                      tdd_phase = context["tdd_phase"] || "normal"
+                   when Agentf::AgentRoles::PLANNER
+                      agent.plan_task(task)
+                   when Agentf::AgentRoles::RESEARCHER
+                      query = context["explore_query"] || "*.rb"
+                      files = commands.fetch("explorer").glob(query)
+                      response = agent.explore(query)
+                      response["files"] = files
+                      response
+                   when Agentf::AgentRoles::QA_TESTER
+                       source_file = context["source_file"] || "app/models/application_record.rb"
+                       tester_commands = commands.fetch("tester")
+                       tdd_phase = context["tdd_phase"] || "normal"
 
                       if tdd_phase == "red"
                         failure_signature = "expected-failure:#{File.basename(source_file)}:#{Time.now.to_i}"
@@ -92,32 +92,32 @@ module Agentf
                         response["failure_signature"] = context["tdd_failure_signature"]
                         response
                       end
-                    when "DEBUGGER"
-                     error = context["error"] || "No error provided"
-                     analysis = commands.fetch("debugger").parse_error(error)
-                     response = agent.diagnose(error, context: context["error_context"])
+                    when Agentf::AgentRoles::INCIDENT_RESPONDER
+                      error = context["error"] || "No error provided"
+                      analysis = commands.fetch("debugger").parse_error(error)
+                      response = agent.diagnose(error, context: context["error_context"])
                      response["analysis"] = {
                        "error_type" => analysis.error_type,
                        "root_cause" => analysis.possible_causes,
                        "suggested_fix" => analysis.suggested_fix
                      }
                      response
-                   when "DESIGNER"
-                     design_spec = context["design_spec"] || "Create a card component"
-                     spec = commands.fetch("designer").generate_component("GeneratedComponent", design_spec)
-                     response = agent.implement_design(design_spec)
-                     response["generated_code"] = spec.code
-                     response
-                   when "SPECIALIST"
-                     subtask = context["current_subtask"] || { "description" => task }
-                     agent.execute(subtask)
-                   when "SECURITY"
-                     agent.assess(task: task, context: context)
-                   when "REVIEWER"
-                     last_result = context["execution"] || {}
-                     agent.review(last_result)
-                   when "DOCUMENTER"
-                     agent.sync_docs("project")
+                    when Agentf::AgentRoles::UI_ENGINEER
+                      design_spec = context["design_spec"] || "Create a card component"
+                      spec = commands.fetch("designer").generate_component("GeneratedComponent", design_spec)
+                      response = agent.implement_design(design_spec)
+                      response["generated_code"] = spec.code
+                      response
+                    when Agentf::AgentRoles::ENGINEER
+                      subtask = context["current_subtask"] || { "description" => task }
+                      agent.execute(subtask)
+                    when Agentf::AgentRoles::SECURITY_REVIEWER
+                      agent.assess(task: task, context: context)
+                    when Agentf::AgentRoles::REVIEWER
+                      last_result = context["execution"] || {}
+                      agent.review(last_result)
+                    when Agentf::AgentRoles::KNOWLEDGE_MANAGER
+                      agent.sync_docs("project")
                    else
                      { "status" => "not_implemented" }
                    end
@@ -133,11 +133,11 @@ module Agentf
       class OpenCode < Base
         def workflow_templates
           {
-            "feature" => %w[ARCHITECT EXPLORER DESIGNER SPECIALIST TESTER SECURITY REVIEWER DOCUMENTER],
-            "bugfix" => %w[ARCHITECT DEBUGGER SPECIALIST TESTER SECURITY REVIEWER],
-            "quick_fix" => %w[SPECIALIST SECURITY REVIEWER],
-            "exploration" => %w[EXPLORER],
-            "refactor" => %w[ARCHITECT EXPLORER SPECIALIST TESTER SECURITY REVIEWER]
+            "feature" => %w[PLANNER RESEARCHER UI_ENGINEER ENGINEER QA_TESTER SECURITY_REVIEWER REVIEWER KNOWLEDGE_MANAGER],
+            "bugfix" => %w[PLANNER INCIDENT_RESPONDER ENGINEER QA_TESTER SECURITY_REVIEWER REVIEWER],
+            "quick_fix" => %w[ENGINEER SECURITY_REVIEWER REVIEWER],
+            "exploration" => %w[RESEARCHER],
+            "refactor" => %w[PLANNER RESEARCHER ENGINEER QA_TESTER SECURITY_REVIEWER REVIEWER]
           }
         end
       end
@@ -145,11 +145,11 @@ module Agentf
       class Copilot < Base
         def workflow_templates
           {
-            "feature" => %w[ARCHITECT SPECIALIST TESTER SECURITY REVIEWER DOCUMENTER],
-            "bugfix" => %w[DEBUGGER SPECIALIST TESTER SECURITY REVIEWER],
-            "quick_fix" => %w[SPECIALIST REVIEWER],
-            "exploration" => %w[EXPLORER],
-            "refactor" => %w[ARCHITECT SPECIALIST TESTER REVIEWER]
+            "feature" => %w[PLANNER ENGINEER QA_TESTER SECURITY_REVIEWER REVIEWER KNOWLEDGE_MANAGER],
+            "bugfix" => %w[INCIDENT_RESPONDER ENGINEER QA_TESTER SECURITY_REVIEWER REVIEWER],
+            "quick_fix" => %w[ENGINEER REVIEWER],
+            "exploration" => %w[RESEARCHER],
+            "refactor" => %w[PLANNER ENGINEER QA_TESTER REVIEWER]
           }
         end
       end

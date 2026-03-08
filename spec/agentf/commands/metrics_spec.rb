@@ -21,10 +21,10 @@ RSpec.describe Agentf::Commands::Metrics do
         "provider" => "OPENCODE",
         "workflow_type" => "feature",
         "task" => "Add auth flow",
-        "completed_agents" => %w[ARCHITECT SPECIALIST REVIEWER],
+        "completed_agents" => %w[PLANNER ENGINEER REVIEWER],
         "results" => [
-          { "agent" => "ARCHITECT", "result" => { "ok" => true } },
-          { "agent" => "SECURITY", "result" => { "issues" => [] } },
+          { "agent" => "PLANNER", "result" => { "ok" => true } },
+          { "agent" => "SECURITY_REVIEWER", "result" => { "issues" => [] } },
           { "agent" => "REVIEWER", "result" => { "approved" => true } }
         ]
       }
@@ -48,9 +48,9 @@ RSpec.describe Agentf::Commands::Metrics do
         "provider" => "OPENCODE",
         "workflow_type" => "feature",
         "task" => "Feature A",
-        "completed_agents" => %w[ARCHITECT REVIEWER],
+        "completed_agents" => %w[PLANNER REVIEWER],
         "results" => [
-          { "agent" => "SECURITY", "result" => { "issues" => [] } },
+          { "agent" => "SECURITY_REVIEWER", "result" => { "issues" => [] } },
           { "agent" => "REVIEWER", "result" => { "approved" => true } }
         ]
       )
@@ -59,9 +59,9 @@ RSpec.describe Agentf::Commands::Metrics do
         "provider" => "COPILOT",
         "workflow_type" => "bugfix",
         "task" => "Bug B",
-        "completed_agents" => %w[DEBUGGER REVIEWER],
+        "completed_agents" => %w[INCIDENT_RESPONDER REVIEWER],
         "results" => [
-          { "agent" => "SECURITY", "result" => { "issues" => [{ "issue" => "Potential Secret" }] } },
+          { "agent" => "SECURITY_REVIEWER", "result" => { "issues" => [{ "issue" => "Potential Secret" }] } },
           { "agent" => "REVIEWER", "result" => { "approved" => false } }
         ]
       )
@@ -84,9 +84,9 @@ RSpec.describe Agentf::Commands::Metrics do
         "provider" => "OPENCODE",
         "workflow_type" => "feature",
         "task" => "Feature parity",
-        "completed_agents" => %w[ARCHITECT REVIEWER],
+        "completed_agents" => %w[PLANNER REVIEWER],
         "results" => [
-          { "agent" => "SECURITY", "result" => { "issues" => [] } },
+          { "agent" => "SECURITY_REVIEWER", "result" => { "issues" => [] } },
           { "agent" => "REVIEWER", "result" => { "approved" => true } }
         ]
       )
@@ -95,9 +95,9 @@ RSpec.describe Agentf::Commands::Metrics do
         "provider" => "COPILOT",
         "workflow_type" => "feature",
         "task" => "Feature parity",
-        "completed_agents" => %w[ARCHITECT REVIEWER],
+        "completed_agents" => %w[PLANNER REVIEWER],
         "results" => [
-          { "agent" => "SECURITY", "result" => { "issues" => [] } },
+          { "agent" => "SECURITY_REVIEWER", "result" => { "issues" => [] } },
           { "agent" => "REVIEWER", "result" => { "approved" => false } }
         ]
       )

@@ -10,7 +10,7 @@ RSpec.describe Agentf::Service::Providers::OpenCode do
       )
 
       expect(result["workflow_type"]).to eq("bugfix")
-      expect(result["agents_needed"]).to include("DEBUGGER")
+      expect(result["agents_needed"]).to include("INCIDENT_RESPONDER")
       expect(result["provider"]).to eq("OPENCODE")
     end
   end
@@ -22,10 +22,10 @@ RSpec.describe Agentf::Service::Providers::OpenCode do
       allow(architect).to receive(:plan_task).with("Add auth").and_return("ok" => true)
 
       result = provider.execute_agent(
-        agent_name: "ARCHITECT",
+        agent_name: "PLANNER",
         task: "Add auth",
         context: {},
-        agents: { "ARCHITECT" => architect },
+        agents: { "PLANNER" => architect },
         commands: {}
       )
 
@@ -50,10 +50,10 @@ RSpec.describe Agentf::Service::Providers::OpenCode do
       allow(tester_commands).to receive(:generate_unit_tests)
 
       result = provider.execute_agent(
-        agent_name: "TESTER",
+        agent_name: "QA_TESTER",
         task: "Fix auth",
         context: { "source_file" => "app/models/user.rb", "tdd_phase" => "red" },
-        agents: { "TESTER" => tester },
+        agents: { "QA_TESTER" => tester },
         commands: { "tester" => tester_commands }
       )
 
@@ -72,8 +72,8 @@ RSpec.describe Agentf::Service::Providers::Copilot do
       result = provider.build_plan(task: "Add feature")
 
       expect(result["provider"]).to eq("COPILOT")
-      expect(result["agents_needed"]).to include("SPECIALIST", "TESTER", "REVIEWER")
-      expect(result["agents_needed"]).not_to include("EXPLORER")
+      expect(result["agents_needed"]).to include("ENGINEER", "QA_TESTER", "REVIEWER")
+      expect(result["agents_needed"]).not_to include("RESEARCHER")
     end
   end
 end

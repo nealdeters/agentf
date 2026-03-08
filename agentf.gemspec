@@ -6,11 +6,13 @@ Gem::Specification.new do |spec|
   spec.name          = "agentf"
   spec.version       = Agentf::VERSION
   spec.authors       = ["Neal Deters"]
-  spec.summary       = "A self-learning swarm of agents with shared memory"
+  spec.summary       = "Ruby multi-agent workflow engine with Redis memory"
   spec.description   = <<-DESC
-    A multi-agent system with Redis-backed memory for code execution,
-    testing, debugging, and design implementation. Designed for
-    frontend, backend, and API development workflows.
+    Agentf is a Ruby-native multi-agent workflow engine with an ORCHESTRATOR,
+    role-specialized agents, provider adapters (OpenCode/Copilot), and
+    Redis-backed semantic, episodic, and graph-style memory. It includes a
+    unified CLI, MCP server tools, and install/update workflows for generated
+    agent/command manifests.
   DESC
   spec.homepage      = "https://github.com/nealdeters/agentf"
   spec.license       = "MIT"

@@ -35,7 +35,7 @@ RSpec.describe "Agent workflow integration" do
       get_relevant_context(agent: agent, query_embedding: query_embedding, task_type: task_type, limit: limit)
     end
 
-    def store_feature_intent(title:, description:, acceptance_criteria: [], non_goals: [], tags: [], agent: "WORKFLOW_ENGINE", related_task_id: nil)
+    def store_feature_intent(title:, description:, acceptance_criteria: [], non_goals: [], tags: [], agent: "ORCHESTRATOR", related_task_id: nil)
       store_episode(
         type: "feature_intent",
         title: title,
@@ -47,7 +47,7 @@ RSpec.describe "Agent workflow integration" do
       )
     end
 
-    def store_episode(type:, title:, description:, context: "", code_snippet: "", tags: [], agent: "SPECIALIST", related_task_id: nil)
+    def store_episode(type:, title:, description:, context: "", code_snippet: "", tags: [], agent: "ENGINEER", related_task_id: nil)
       record = {
         "id" => "episode_#{@records.size + 1}",
         "type" => type,
@@ -109,19 +109,19 @@ RSpec.describe "Agent workflow integration" do
 
       expect(result["workflow_type"]).to eq("feature")
       expect(result["workflow_contract"]).to be_a(Hash)
-      expect(result["completed_agents"]).to eq(%w[ARCHITECT EXPLORER DESIGNER SPECIALIST TESTER SECURITY REVIEWER DOCUMENTER])
+      expect(result["completed_agents"]).to eq(%w[PLANNER RESEARCHER UI_ENGINEER ENGINEER QA_TESTER SECURITY_REVIEWER REVIEWER KNOWLEDGE_MANAGER])
       expect(result.dig("tdd", "enabled")).to be(true)
       expect(result.dig("tdd", "red_executed")).to be(true)
 
-      red_phase = result["results"].find { |r| r["agent"] == "TESTER_TDD_RED" }
+      red_phase = result["results"].find { |r| r["agent"] == "QA_TESTER_TDD_RED" }
       expect(red_phase).not_to be_nil
       expect(red_phase.dig("result", "tdd_phase")).to eq("red")
       expect(red_phase.dig("result", "passed")).to be(false)
 
-      designers = memory.records.select { |mem| mem["agent"] == "DESIGNER" && mem["type"] == "success" }
-      testers = memory.records.select { |mem| mem["agent"] == "TESTER" && mem["type"] == "success" }
-      specialists = memory.records.select { |mem| mem["agent"] == "SPECIALIST" && mem["type"] == "success" }
-      security = memory.records.select { |mem| mem["agent"] == "SECURITY" }
+      designers = memory.records.select { |mem| mem["agent"] == "UI_ENGINEER" && mem["type"] == "success" }
+      testers = memory.records.select { |mem| mem["agent"] == "QA_TESTER" && mem["type"] == "success" }
+      specialists = memory.records.select { |mem| mem["agent"] == "ENGINEER" && mem["type"] == "success" }
+      security = memory.records.select { |mem| mem["agent"] == "SECURITY_REVIEWER" }
 
       expect(designers).not_to be_empty
       expect(testers).not_to be_empty
@@ -129,7 +129,7 @@ RSpec.describe "Agent workflow integration" do
       expect(security).not_to be_empty
       expect(%w[success pitfall]).to include(security.first["type"])
 
-      documenter_result = result["results"].find { |r| r["agent"] == "DOCUMENTER" }
+      documenter_result = result["results"].find { |r| r["agent"] == "KNOWLEDGE_MANAGER" }
       expect(documenter_result["result"]["successes"]).not_to be_empty
       expect(documenter_result["result"]["total_memories"]).to be <= memory.records.size
     end
@@ -152,15 +152,15 @@ RSpec.describe "Agent workflow integration" do
 
       expect(result["workflow_type"]).to eq("bugfix")
       expect(result["architecture_review"]).to be_a(Hash)
-      expect(result["completed_agents"]).to eq(%w[ARCHITECT DEBUGGER SPECIALIST TESTER SECURITY REVIEWER])
+      expect(result["completed_agents"]).to eq(%w[PLANNER INCIDENT_RESPONDER ENGINEER QA_TESTER SECURITY_REVIEWER REVIEWER])
       expect(result.dig("tdd", "red_executed")).to be(true)
       expect(result.dig("tdd", "green_executed")).to be(true)
 
-      debugger_memories = memory.records.select { |mem| mem["agent"] == "DEBUGGER" && mem["type"] == "lesson" }
+      debugger_memories = memory.records.select { |mem| mem["agent"] == "INCIDENT_RESPONDER" && mem["type"] == "lesson" }
       expect(debugger_memories).not_to be_empty
       expect(debugger_memories.first["title"]).to include("NoMethodError")
 
-      security_memories = memory.records.select { |mem| mem["agent"] == "SECURITY" }
+      security_memories = memory.records.select { |mem| mem["agent"] == "SECURITY_REVIEWER" }
       expect(security_memories).not_to be_empty
 
       reviewer_result = result["results"].find { |r| r["agent"] == "REVIEWER" }

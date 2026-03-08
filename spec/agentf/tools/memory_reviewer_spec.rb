@@ -94,11 +94,11 @@ RSpec.describe Agentf::Commands::MemoryReviewer do
 
   describe "#get_by_agent" do
     it "filters memories by agent" do
-      memory.store_lesson(title: "A", description: "d", tags: [], agent: "ARCHITECT")
-      memory.store_lesson(title: "B", description: "d", tags: [], agent: "SPECIALIST")
+      memory.store_lesson(title: "A", description: "d", tags: [], agent: "PLANNER")
+      memory.store_lesson(title: "B", description: "d", tags: [], agent: "ENGINEER")
 
-      result = reviewer.get_by_agent("ARCHITECT", limit: 10)
-      expect(result["memories"].all? { |m| m["agent"] == "ARCHITECT" }).to be true
+      result = reviewer.get_by_agent("PLANNER", limit: 10)
+      expect(result["memories"].all? { |m| m["agent"] == "PLANNER" }).to be true
     end
   end
 

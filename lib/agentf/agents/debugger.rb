@@ -23,6 +23,22 @@ module Agentf
         COMMANDS
       end
 
+      def self.typed_name
+        Agentf::AgentRoles::INCIDENT_RESPONDER
+      end
+
+      def self.when_to_use
+        "Use for incident triage, root-cause analysis, and remediation paths."
+      end
+
+      def self.deliverables
+        ["Root-cause analysis", "Fix guidance", "Incident lesson record"]
+      end
+
+      def self.working_style
+        "Diagnostic, hypothesis-driven, and remediation-focused."
+      end
+
       def self.memory_concepts
         MEMORY_CONCEPTS
       end

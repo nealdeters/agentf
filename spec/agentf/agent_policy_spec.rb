@@ -9,7 +9,7 @@ RSpec.describe Agentf::AgentPolicy do
     }
 
     violations = policy.validate(
-      agent_name: "TESTER",
+      agent_name: "QA_TESTER",
       boundaries: boundaries,
       context: { "source_file" => "app/models/user.rb" },
       result: { "passed" => true }
@@ -24,7 +24,7 @@ RSpec.describe Agentf::AgentPolicy do
     }
 
     violations = policy.validate(
-      agent_name: "TESTER",
+      agent_name: "QA_TESTER",
       boundaries: boundaries,
       context: {},
       result: {}

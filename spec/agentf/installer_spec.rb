@@ -19,13 +19,13 @@ RSpec.describe Agentf::Installer do
       results = installer.install(
         providers: ["opencode"],
         scope: "local",
-        only_agents: ["architect"],
+        only_agents: ["planner"],
         only_commands: ["debugger"]
       )
 
       expect(results).not_to be_empty
 
-      agent_path = File.join(local_root, ".opencode/agents/agentf-architect.md")
+      agent_path = File.join(local_root, ".opencode/agents/agentf-planner.md")
       command_path = File.join(local_root, ".opencode/commands/agentf-debugger.md")
 
       expect(File).to exist(agent_path)
@@ -43,11 +43,11 @@ RSpec.describe Agentf::Installer do
       installer.install(
         providers: ["copilot"],
         scope: "local",
-        only_agents: ["architect"],
+        only_agents: ["planner"],
         only_commands: ["debugger"]
       )
 
-      agent_manifest = File.join(local_root, ".github/agents/architect.agent.md")
+      agent_manifest = File.join(local_root, ".github/agents/planner.agent.md")
       command_manifest = File.join(local_root, ".github/commands/debugger.md")
 
       expect(File).to exist(agent_manifest)
@@ -63,11 +63,11 @@ RSpec.describe Agentf::Installer do
       installer.install(
         providers: ["opencode"],
         scope: "local",
-        only_agents: ["architect"],
+        only_agents: ["planner"],
         only_commands: ["debugger"]
       )
 
-      workflow_agent = File.join(local_root, ".opencode/agents/agentf-workflow-engine.md")
+      workflow_agent = File.join(local_root, ".opencode/agents/agentf-orchestrator.md")
       plugin = File.join(local_root, ".opencode/plugins/agentf-plugin.ts")
       memory_schema = File.join(local_root, ".opencode/memory/agentf-redis-schema.md")
       opencode_json = File.join(local_root, "opencode.json")
@@ -93,13 +93,13 @@ RSpec.describe Agentf::Installer do
       results = installer.install(
         providers: ["opencode"],
         scope: "local",
-        only_agents: ["architect"],
+        only_agents: ["planner"],
         only_commands: ["debugger"]
       )
 
       expect(results).to all(include("status" => "planned"))
-      expect(File).not_to exist(File.join(local_root, ".opencode/agents/agentf-architect.md"))
-      expect(File).not_to exist(File.join(local_root, ".opencode/agents/agentf-workflow-engine.md"))
+      expect(File).not_to exist(File.join(local_root, ".opencode/agents/agentf-planner.md"))
+      expect(File).not_to exist(File.join(local_root, ".opencode/agents/agentf-orchestrator.md"))
       expect(File).not_to exist(File.join(local_root, ".opencode/plugins/agentf-plugin.ts"))
       expect(File).not_to exist(File.join(local_root, ".opencode/memory/agentf-redis-schema.md"))
       expect(File).not_to exist(File.join(local_root, "opencode.json"))
@@ -119,11 +119,11 @@ RSpec.describe Agentf::Installer do
       installer.install(
         providers: ["opencode"],
         scope: "local",
-        only_agents: ["architect"],
+        only_agents: ["planner"],
         only_commands: []
       )
 
-      agent_path = File.join(local_root, ".opencode/agents/agentf-architect.md")
+      agent_path = File.join(local_root, ".opencode/agents/agentf-planner.md")
       content = File.read(agent_path)
 
       # Architect reads get_recent_memories and get_pitfalls
@@ -137,11 +137,11 @@ RSpec.describe Agentf::Installer do
       installer.install(
         providers: ["opencode"],
         scope: "local",
-        only_agents: ["specialist"],
+        only_agents: ["engineer"],
         only_commands: []
       )
 
-      agent_path = File.join(local_root, ".opencode/agents/agentf-specialist.md")
+      agent_path = File.join(local_root, ".opencode/agents/agentf-engineer.md")
       content = File.read(agent_path)
 
       # Specialist has no reads, so fallback should add a read action

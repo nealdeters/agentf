@@ -132,7 +132,7 @@ RSpec.describe Agentf::Memory::RedisMemory do
       memory.store_playbook(title: "Architecture playbook", description: "Use modular boundaries")
       memory.store_pitfall(title: "Old pitfall", description: "Legacy mistake")
 
-      context = memory.get_agent_context(agent: "ARCHITECT", task_type: "feature", limit: 2)
+      context = memory.get_agent_context(agent: "PLANNER", task_type: "feature", limit: 2)
 
       expect(context["memories"].length).to eq(2)
       expect(context["profile"]).to have_key("preferred_types")
@@ -180,7 +180,7 @@ RSpec.describe Agentf::Memory::RedisMemory do
   describe "#get_relevant_context" do
     it "returns structured context with intents and memories" do
       memory = described_class.new(project: project)
-      context = memory.get_relevant_context(agent: "ARCHITECT", query_embedding: [0.2, 0.1], limit: 3)
+      context = memory.get_relevant_context(agent: "PLANNER", query_embedding: [0.2, 0.1], limit: 3)
 
       expect(context).to have_key("intent")
       expect(context).to have_key("memories")

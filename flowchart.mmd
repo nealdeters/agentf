@@ -26,10 +26,10 @@ reads/writes/policy]
 
   subgraph Runtime[Execution Runtime]
     APP[App / User Task]
-    WF[Agentf::WorkflowEngine]
+    WF[Agentf::WorkflowEngine\nORCHESTRATOR]
     P[Provider Adapter
 OpenCode / Copilot]
-    AG[Agents]
+    AG[Role Agents\nPLANNER/ENGINEER/QA_TESTER/etc]
     COM[Commands]
     TOOLS[Tools]
   end
@@ -43,6 +43,7 @@ OpenCode / Copilot]
   WF -->|get_relevant_context| REDIS[(RedisMemory)]
   WF -->|store_feature_intent| REDIS
   AG -->|store_success/pitfall/lesson| REDIS
+  REDIS --> EDGE[(Edge Graph\nedge:*)]
 
   subgraph MemoryCLI[Memory CLI]
     MCLI[agentf memory ...]
@@ -51,11 +52,12 @@ OpenCode / Copilot]
 
   MCLI --> MR
   MR -->|query/search/summaries| REDIS
+  MR -->|neighbors/subgraph| EDGE
   MCLI -->|add-business-intent / add-feature-intent| REDIS
 
   subgraph MCP[MCP Server]
     MS[agentf mcp-server]
-    MTOOLS[code_* + memory_* tools]
+    MTOOLS[code and memory tools<br/>neighbors and subgraph]
   end
 
   MS --> MTOOLS

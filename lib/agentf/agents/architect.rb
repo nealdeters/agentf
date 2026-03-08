@@ -22,6 +22,22 @@ module Agentf
         COMMANDS
       end
 
+      def self.typed_name
+        Agentf::AgentRoles::PLANNER
+      end
+
+      def self.when_to_use
+        "Use for planning, decomposition, and constraints mapping before implementation."
+      end
+
+      def self.deliverables
+        ["Execution plan", "Decomposed subtasks", "Risk and pitfall notes"]
+      end
+
+      def self.working_style
+        "Strategic and constraint-aware with explicit decomposition."
+      end
+
       def self.memory_concepts
         MEMORY_CONCEPTS
       end

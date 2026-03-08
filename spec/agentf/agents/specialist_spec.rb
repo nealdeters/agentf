@@ -20,7 +20,7 @@ RSpec.describe Agentf::Agents::Specialist do
         description: "Successfully executed subtask sub_1",
         context: "Working on auth",
         tags: ["implementation", "ruby"],
-        agent: "SPECIALIST"
+        agent: "ENGINEER"
       )
 
       result = specialist.execute(subtask)
@@ -42,7 +42,7 @@ RSpec.describe Agentf::Agents::Specialist do
         description: "Subtask sub_2 failed",
         context: "Working on deploy",
         tags: ["failure", "implementation"],
-        agent: "SPECIALIST"
+        agent: "ENGINEER"
       )
 
       result = specialist.execute(subtask)

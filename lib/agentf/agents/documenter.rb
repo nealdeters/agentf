@@ -22,6 +22,22 @@ module Agentf
         COMMANDS
       end
 
+      def self.typed_name
+        Agentf::AgentRoles::KNOWLEDGE_MANAGER
+      end
+
+      def self.when_to_use
+        "Use for memory synthesis, knowledge rollups, and delivery-ready summaries."
+      end
+
+      def self.deliverables
+        ["Success summary", "Pitfall summary", "Knowledge digest"]
+      end
+
+      def self.working_style
+        "Concise synthesis with attention to sensitive data boundaries."
+      end
+
       def self.memory_concepts
         MEMORY_CONCEPTS
       end

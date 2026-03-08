@@ -54,6 +54,10 @@ module Agentf
           list_tags
         when "search"
           search_memories(args)
+        when "neighbors"
+          neighbors(args)
+        when "subgraph"
+          subgraph(args)
         when "summary", "stats"
           show_summary
         when "by-tag"
@@ -195,7 +199,7 @@ module Agentf
 
         tags = parse_list_option(args, "--tags=")
         context = parse_single_option(args, "--context=").to_s
-        agent = parse_single_option(args, "--agent=") || "SPECIALIST"
+        agent = parse_single_option(args, "--agent=") || Agentf::AgentRoles::ENGINEER
         code_snippet = parse_single_option(args, "--code=").to_s
 
         intent_id = @memory.store_episode(
@@ -297,6 +301,34 @@ module Agentf
         output(result)
       end
 
+      def neighbors(args)
+        node_id = args.shift.to_s
+        if node_id.empty?
+          $stderr.puts "Error: neighbors requires a node id"
+          exit 1
+        end
+
+        relation = parse_single_option(args, "--relation=")
+        depth = parse_integer_option(args, "--depth=", default: 1)
+        limit = extract_limit(args)
+        result = @reviewer.neighbors(node_id, relation: relation, depth: depth, limit: limit)
+        output_graph(result)
+      end
+
+      def subgraph(args)
+        seeds = args.shift.to_s.split(",").map(&:strip).reject(&:empty?)
+        if seeds.empty?
+          $stderr.puts "Error: subgraph requires comma-separated seed ids"
+          exit 1
+        end
+
+        relation_filters = parse_list_option(args, "--relation=")
+        depth = parse_integer_option(args, "--depth=", default: 2)
+        limit = extract_limit(args, default: 200)
+        result = @reviewer.subgraph(seed_ids: seeds, relation_filters: relation_filters, depth: depth, limit: limit)
+        output_graph(result)
+      end
+
       def merge_memory_results(*results, limit:)
         entries = results.flat_map { |result| result["memories"] || [] }
         sorted = entries.sort_by { |entry| -(entry["created_at_unix"] || 0) }
@@ -328,6 +360,28 @@ module Agentf
         memories.each do |mem|
           puts format_memory(mem)
           puts "-" * 40
+        end
+      end
+
+      def output_graph(result)
+        if result["error"]
+          if @json_output
+            puts JSON.generate({ "error" => result["error"] })
+          else
+            $stderr.puts "Error: #{result['error']}"
+          end
+          exit 1
+        end
+
+        if @json_output
+          puts JSON.generate(result)
+          return
+        end
+
+        puts "Graph result: #{result['count']} edges"
+        puts "Nodes: #{Array(result['nodes']).length}"
+        Array(result["edges"]).each do |edge|
+          puts "  - #{edge['source_id']} --#{edge['relation']}--> #{edge['target_id']}"
         end
       end
 
@@ -366,6 +420,8 @@ module Agentf
             add-pitfall               Store pitfall memory
             tags                      List all unique tags
             search <query>            Search memories by keyword
+            neighbors <id>            Traverse graph edges from a memory id
+            subgraph <ids>            Build graph from comma-separated seed ids
             summary, stats            Show summary statistics
             by-tag <tag>              Get memories with specific tag
             by-agent <agent>          Get memories from specific agent
@@ -381,9 +437,10 @@ module Agentf
             agentf memory intents business -n 5
             agentf memory add-business-intent "Reliability" "Prioritize uptime" --tags=ops,platform --constraints="No downtime;No vendor lock-in"
             agentf memory add-feature-intent "Agent handoff" "Improve orchestrator continuity" --acceptance="Keeps context;Preserves task state"
-            agentf memory add-lesson "Refactor strategy" "Extracted adapter seam" --agent=ARCHITECT --tags=architecture
-            agentf memory add-success "Provider install works" "Installed copilot + opencode manifests" --agent=SPECIALIST
+            agentf memory add-lesson "Refactor strategy" "Extracted adapter seam" --agent=PLANNER --tags=architecture
+            agentf memory add-success "Provider install works" "Installed copilot + opencode manifests" --agent=ENGINEER
             agentf memory search "react"
+            agentf memory neighbors episode_abcd --depth=2
             agentf memory by-tag "performance"
             agentf memory summary
         HELP

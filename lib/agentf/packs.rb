@@ -14,11 +14,11 @@ module Agentf
         "description" => "Thin models/controllers with services, queries, presenters, and policy reviews.",
         "keywords" => %w[rails activerecord rspec pundit viewcomponent hotwire turbo stimulus],
         "workflow_templates" => {
-          "feature" => %w[ARCHITECT EXPLORER SPECIALIST TESTER SECURITY REVIEWER DOCUMENTER],
-          "bugfix" => %w[ARCHITECT DEBUGGER SPECIALIST TESTER SECURITY REVIEWER],
-          "refactor" => %w[ARCHITECT EXPLORER SPECIALIST TESTER REVIEWER],
-          "quick_fix" => %w[SPECIALIST TESTER REVIEWER],
-          "exploration" => %w[EXPLORER]
+          "feature" => %w[PLANNER RESEARCHER ENGINEER QA_TESTER SECURITY_REVIEWER REVIEWER KNOWLEDGE_MANAGER],
+          "bugfix" => %w[PLANNER INCIDENT_RESPONDER ENGINEER QA_TESTER SECURITY_REVIEWER REVIEWER],
+          "refactor" => %w[PLANNER RESEARCHER ENGINEER QA_TESTER REVIEWER],
+          "quick_fix" => %w[ENGINEER QA_TESTER REVIEWER],
+          "exploration" => %w[RESEARCHER]
         }
       },
       "rails_37signals" => {
@@ -26,11 +26,11 @@ module Agentf
         "description" => "Resource-centric workflows favoring concerns, CRUD and model-rich patterns.",
         "keywords" => %w[rails concern crud closure model minitest hotwire],
         "workflow_templates" => {
-          "feature" => %w[ARCHITECT EXPLORER SPECIALIST TESTER REVIEWER DOCUMENTER],
-          "bugfix" => %w[ARCHITECT DEBUGGER SPECIALIST TESTER REVIEWER],
-          "refactor" => %w[ARCHITECT SPECIALIST TESTER REVIEWER],
-          "quick_fix" => %w[SPECIALIST REVIEWER],
-          "exploration" => %w[EXPLORER]
+          "feature" => %w[PLANNER RESEARCHER ENGINEER QA_TESTER REVIEWER KNOWLEDGE_MANAGER],
+          "bugfix" => %w[PLANNER INCIDENT_RESPONDER ENGINEER QA_TESTER REVIEWER],
+          "refactor" => %w[PLANNER ENGINEER QA_TESTER REVIEWER],
+          "quick_fix" => %w[ENGINEER REVIEWER],
+          "exploration" => %w[RESEARCHER]
         }
       },
       "rails_feature_spec" => {
@@ -38,11 +38,11 @@ module Agentf
         "description" => "Feature-spec-first orchestration with planning and review emphasis.",
         "keywords" => %w[rails feature specification acceptance criteria],
         "workflow_templates" => {
-          "feature" => %w[ARCHITECT EXPLORER DESIGNER SPECIALIST TESTER REVIEWER DOCUMENTER],
-          "bugfix" => %w[ARCHITECT DEBUGGER SPECIALIST TESTER REVIEWER],
-          "refactor" => %w[ARCHITECT EXPLORER SPECIALIST TESTER REVIEWER],
-          "quick_fix" => %w[SPECIALIST REVIEWER],
-          "exploration" => %w[EXPLORER]
+          "feature" => %w[PLANNER RESEARCHER UI_ENGINEER ENGINEER QA_TESTER REVIEWER KNOWLEDGE_MANAGER],
+          "bugfix" => %w[PLANNER INCIDENT_RESPONDER ENGINEER QA_TESTER REVIEWER],
+          "refactor" => %w[PLANNER RESEARCHER ENGINEER QA_TESTER REVIEWER],
+          "quick_fix" => %w[ENGINEER REVIEWER],
+          "exploration" => %w[RESEARCHER]
         }
       }
     }.freeze

@@ -22,6 +22,22 @@ module Agentf
         COMMANDS
       end
 
+      def self.typed_name
+        Agentf::AgentRoles::REVIEWER
+      end
+
+      def self.when_to_use
+        "Use for approval decisions, regression checks, and evidence-backed review."
+      end
+
+      def self.deliverables
+        ["Approval decision", "Issue list", "Pitfall-aligned feedback"]
+      end
+
+      def self.working_style
+        "Evidence-first with explicit approval criteria."
+      end
+
       def self.memory_concepts
         MEMORY_CONCEPTS
       end

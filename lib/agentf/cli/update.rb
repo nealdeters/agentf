@@ -138,11 +138,11 @@ module Agentf
 
         old_files = [
           File.join(opencode_dir, "tools", "agentf-tools.ts"),
-          File.join(opencode_dir, "agents", "WORKFLOW_ENGINE.md"),
+          File.join(opencode_dir, "agents", "ORCHESTRATOR.md"),
           File.join(opencode_dir, "memory", "REDIS_SCHEMA.md")
         ]
 
-        old_agent_names = %w[EXPLORER ARCHITECT DESIGNER DEBUGGER REVIEWER TESTER DOCUMENTER SECURITY SPECIALIST]
+        old_agent_names = %w[RESEARCHER PLANNER UI_ENGINEER INCIDENT_RESPONDER REVIEWER QA_TESTER KNOWLEDGE_MANAGER SECURITY_REVIEWER ENGINEER]
         old_files.concat(old_agent_names.map { |name| File.join(opencode_dir, "agents", "#{name}.md") })
 
         old_command_names = %w[explorer tester metrics security_scanner memory_reviewer designer debugger architecture]

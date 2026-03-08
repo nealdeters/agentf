@@ -23,6 +23,22 @@ module Agentf
         COMMANDS
       end
 
+      def self.typed_name
+        Agentf::AgentRoles::QA_TESTER
+      end
+
+      def self.when_to_use
+        "Use for test generation, red/green validation, and execution verification."
+      end
+
+      def self.deliverables
+        ["Generated test artifacts", "Pass/fail evidence", "TDD phase signals"]
+      end
+
+      def self.working_style
+        "Quality-gate oriented with explicit pass/fail reporting."
+      end
+
       def self.memory_concepts
         MEMORY_CONCEPTS
       end

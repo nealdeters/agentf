@@ -90,7 +90,7 @@ module Agentf
 
           Examples:
             agentf memory recent -n 5
-            agentf memory add-lesson "Title" "Description" --agent=ARCHITECT
+            agentf memory add-lesson "Title" "Description" --agent=PLANNER
             agentf code glob "lib/**/*.rb"
             agentf code grep "def execute" --file-pattern=*.rb
             agentf install --provider opencode,copilot --scope local

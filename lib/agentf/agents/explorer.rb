@@ -23,6 +23,22 @@ module Agentf
         COMMANDS
       end
 
+      def self.typed_name
+        Agentf::AgentRoles::RESEARCHER
+      end
+
+      def self.when_to_use
+        "Use for codebase discovery, evidence gathering, and dependency tracing."
+      end
+
+      def self.deliverables
+        ["Relevant file list", "Search evidence", "Context breadcrumbs"]
+      end
+
+      def self.working_style
+        "Fast exploration with concrete references and traceable findings."
+      end
+
       def self.memory_concepts
         MEMORY_CONCEPTS
       end

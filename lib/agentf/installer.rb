@@ -116,7 +116,7 @@ module Agentf
     def write_opencode_helpers(root:)
       writes = []
       writes << write_manifest(
-        File.join(root, ".opencode/agents/agentf-workflow-engine.md"),
+        File.join(root, ".opencode/agents/agentf-orchestrator.md"),
         render_workflow_engine_manifest
       )
       writes << write_manifest(
@@ -170,6 +170,18 @@ module Agentf
       <<~MARKDOWN
         #{meta.to_yaml}---
         #{klass.prompt}
+
+        ## Core Mission
+        #{klass.description}
+
+        ## When To Use
+        #{klass.when_to_use}
+
+        ## Deliverables
+        #{Array(klass.deliverables).map { |item| "- #{item}" }.join("\n")}
+
+        ## Working Style
+        #{klass.working_style}
 
         ## Memory Integration
         - Reads: #{Array(klass.memory_concepts["reads"]).join(", ")}
@@ -302,9 +314,15 @@ module Agentf
       <<~MARKDOWN
         # AGENTF-WORKFLOW-ENGINE Agent
 
+        ## Identity
+
+        - Role: ORCHESTRATOR
+        - Division: strategy
+        - Specialty: orchestration
+
         ## Role
 
-        The WORKFLOW_ENGINE coordinates end-to-end workflows by selecting a provider adapter (`opencode` or `copilot`), creating an execution plan, and running agents in sequence.
+        The ORCHESTRATOR coordinates end-to-end workflows by selecting a provider adapter (`opencode` or `copilot`), creating an execution plan, and running agents in sequence.
 
         Implemented in `lib/agentf/workflow_engine.rb`.
 
@@ -319,11 +337,11 @@ module Agentf
 
         ## Execution Flow
 
-        1. WORKFLOW_ENGINE → Requests provider plan
-        2. WORKFLOW_ENGINE → Captures feature intent in memory
-        3. WORKFLOW_ENGINE → Executes planned agents sequentially
+        1. ORCHESTRATOR → Requests provider plan
+        2. ORCHESTRATOR → Captures feature intent in memory
+        3. ORCHESTRATOR → Executes planned agents sequentially
         4. Each agent → Reads relevant context + writes lessons
-        5. WORKFLOW_ENGINE → Summarizes status and returns results
+        5. ORCHESTRATOR → Summarizes status and returns results
 
         ## Notes
 

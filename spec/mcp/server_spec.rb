@@ -18,7 +18,7 @@ RSpec.describe Agentf::MCP::Server do
   # ── Tool registration ───────────────────────────────────────────
 
   describe "tool registration" do
-    it "registers all 10 tools" do
+    it "registers all 12 tools" do
       tools = mcp.server.list_tools
       names = tools.map { |t| t[:name] }
 
@@ -26,6 +26,7 @@ RSpec.describe Agentf::MCP::Server do
         "agentf-code-glob", "agentf-code-grep", "agentf-code-tree", "agentf-code-related-files",
         "agentf-architecture-analyze-layers",
         "agentf-memory-recent", "agentf-memory-search",
+        "agentf-memory-neighbors", "agentf-memory-subgraph",
         "agentf-memory-add-lesson", "agentf-memory-add-success", "agentf-memory-add-pitfall"
       )
     end
@@ -265,7 +266,7 @@ RSpec.describe Agentf::MCP::Server do
         type: "lesson",
         title: "New learning",
         description: "Discovered pattern",
-        agent: "ARCHITECT",
+        agent: "PLANNER",
         tags: ["arch"],
         context: "planning",
         code_snippet: ""
@@ -275,7 +276,7 @@ RSpec.describe Agentf::MCP::Server do
         "agentf-memory-add-lesson",
         title: "New learning",
         description: "Discovered pattern",
-        agent: "ARCHITECT",
+        agent: "PLANNER",
         tags: ["arch"],
         context: "planning"
       )
@@ -293,7 +294,7 @@ RSpec.describe Agentf::MCP::Server do
         type: "success",
         title: "It worked",
         description: "Deployed clean",
-        agent: "SPECIALIST",
+        agent: "ENGINEER",
         tags: [],
         context: "",
         code_snippet: ""
@@ -317,7 +318,7 @@ RSpec.describe Agentf::MCP::Server do
         type: "pitfall",
         title: "Bad deploy",
         description: "Missing env var",
-        agent: "DEBUGGER",
+        agent: "INCIDENT_RESPONDER",
         tags: ["deploy"],
         context: "",
         code_snippet: ""
@@ -327,7 +328,7 @@ RSpec.describe Agentf::MCP::Server do
         "agentf-memory-add-pitfall",
         title: "Bad deploy",
         description: "Missing env var",
-        agent: "DEBUGGER",
+        agent: "INCIDENT_RESPONDER",
         tags: ["deploy"]
       )
       payload = JSON.parse(result)

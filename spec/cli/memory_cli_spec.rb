@@ -19,7 +19,7 @@ RSpec.describe Agentf::CLI::Memory do
             "title" => "Example success",
             "created_at" => "2026-03-02 12:00:00",
             "description" => "Did the thing",
-            "agent" => "TESTER",
+            "agent" => "QA_TESTER",
             "code_snippet" => nil,
             "tags" => %w[testing example]
           }
@@ -45,7 +45,7 @@ RSpec.describe Agentf::CLI::Memory do
     it "returns JSON when requested" do
       allow(reviewer).to receive(:get_recent_memories).with(limit: 10).and_return(
         "count" => 1,
-        "memories" => [{ "type" => "lesson", "title" => "A", "created_at" => "x", "agent" => "ARCHITECT" }]
+        "memories" => [{ "type" => "lesson", "title" => "A", "created_at" => "x", "agent" => "PLANNER" }]
       )
 
       output = capture_stdout { cli.run(["recent", "--json"]) }
@@ -61,7 +61,7 @@ RSpec.describe Agentf::CLI::Memory do
         "project" => "test-project",
         "total_memories" => 3,
         "by_type" => { "pitfall" => 1, "lesson" => 1, "success" => 1 },
-        "by_agent" => { "TESTER" => 2, "DEBUGGER" => 1 },
+        "by_agent" => { "QA_TESTER" => 2, "INCIDENT_RESPONDER" => 1 },
         "unique_tags" => 4
       )
 
@@ -105,7 +105,7 @@ RSpec.describe Agentf::CLI::Memory do
             "title" => "Reliability",
             "created_at" => "2026-03-02 12:00:00",
             "description" => "Prioritize uptime",
-            "agent" => "WORKFLOW_ENGINE",
+            "agent" => "ORCHESTRATOR",
             "code_snippet" => nil,
             "tags" => ["ops"],
             "created_at_unix" => 1
@@ -156,7 +156,7 @@ RSpec.describe Agentf::CLI::Memory do
           "add-lesson",
           "New learning",
           "Use provider adapters",
-          "--agent=ARCHITECT",
+          "--agent=PLANNER",
           "--tags=architecture,learning",
           "--context=planning"
         ])
@@ -171,7 +171,7 @@ RSpec.describe Agentf::CLI::Memory do
           "add-success",
           "Install succeeded",
           "Wrote provider manifests",
-          "--agent=SPECIALIST"
+          "--agent=ENGINEER"
         ])
       end.to output(include("Stored success: episode_success")).to_stdout
     end
@@ -184,7 +184,7 @@ RSpec.describe Agentf::CLI::Memory do
           "add-pitfall",
           "Bad provider value",
           "Unknown provider caused failure",
-          "--agent=WORKFLOW_ENGINE"
+          "--agent=ORCHESTRATOR"
         ])
       end.to output(include("Stored pitfall: episode_pitfall")).to_stdout
     end
@@ -197,7 +197,7 @@ RSpec.describe Agentf::CLI::Memory do
           "add-lesson",
           "JSON learning",
           "Structured output",
-          "--agent=ARCHITECT",
+          "--agent=PLANNER",
           "--json"
         ])
       end

@@ -24,7 +24,7 @@ RSpec.describe Agentf::CLI::Update do
       def install(providers:, scope:)
         @install_calls << { providers: providers, scope: scope }
         providers.map do |p|
-          { "status" => "created", "path" => File.join(@local_root, ".#{p}/agents/ARCHITECT.md") }
+          { "status" => "created", "path" => File.join(@local_root, ".#{p}/agents/PLANNER.md") }
         end
       end
     end

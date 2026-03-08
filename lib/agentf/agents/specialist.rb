@@ -22,6 +22,22 @@ module Agentf
         COMMANDS
       end
 
+      def self.typed_name
+        Agentf::AgentRoles::ENGINEER
+      end
+
+      def self.when_to_use
+        "Use for implementation, code edits, and deterministic execution outcomes."
+      end
+
+      def self.deliverables
+        ["Implemented code", "Execution status", "Success or pitfall memory"]
+      end
+
+      def self.working_style
+        "Execution-focused, deterministic, and evidence-driven."
+      end
+
       def self.memory_concepts
         MEMORY_CONCEPTS
       end

@@ -28,6 +28,8 @@ module Agentf
         agentf-architecture-analyze-layers
         agentf-memory-recent
         agentf-memory-search
+        agentf-memory-neighbors
+        agentf-memory-subgraph
         agentf-memory-add-lesson
         agentf-memory-add-success
         agentf-memory-add-pitfall
@@ -212,6 +214,42 @@ module Agentf
           end
         end
 
+        s.tool("agentf-memory-neighbors") do
+          description "Get neighboring memory nodes by edge traversal."
+          argument :node_id, String, required: true, description: "Starting node id"
+          argument :relation, String, required: false, description: "Optional relation filter"
+          argument :depth, Integer, required: false, description: "Traversal depth"
+          argument :limit, Integer, required: false, description: "Maximum edges"
+          call do |args|
+            mcp_server.send(:guard!, "agentf-memory-neighbors", **args)
+            result = reviewer.neighbors(
+              args[:node_id],
+              relation: args[:relation],
+              depth: args[:depth] || 1,
+              limit: args[:limit] || 50
+            )
+            JSON.generate(result)
+          end
+        end
+
+        s.tool("agentf-memory-subgraph") do
+          description "Build a subgraph from seed ids."
+          argument :seed_ids, Array, required: true, items: String, description: "Seed node ids"
+          argument :relation_filters, Array, required: false, items: String, description: "Optional relations"
+          argument :depth, Integer, required: false, description: "Traversal depth"
+          argument :limit, Integer, required: false, description: "Maximum edges"
+          call do |args|
+            mcp_server.send(:guard!, "agentf-memory-subgraph", **args)
+            result = reviewer.subgraph(
+              seed_ids: args[:seed_ids] || [],
+              relation_filters: args[:relation_filters],
+              depth: args[:depth] || 2,
+              limit: args[:limit] || 200
+            )
+            JSON.generate(result)
+          end
+        end
+
         s.tool("agentf-memory-add-lesson") do
           description "Store a lesson memory in Redis."
           argument :title, String, required: true, description: "Lesson title"
@@ -225,7 +263,7 @@ module Agentf
               type: "lesson",
               title: args[:title],
               description: args[:description],
-              agent: args[:agent] || "SPECIALIST",
+              agent: args[:agent] || Agentf::AgentRoles::ENGINEER,
               tags: args[:tags] || [],
               context: args[:context].to_s,
               code_snippet: ""
@@ -247,7 +285,7 @@ module Agentf
               type: "success",
               title: args[:title],
               description: args[:description],
-              agent: args[:agent] || "SPECIALIST",
+              agent: args[:agent] || Agentf::AgentRoles::ENGINEER,
               tags: args[:tags] || [],
               context: args[:context].to_s,
               code_snippet: ""
@@ -269,7 +307,7 @@ module Agentf
               type: "pitfall",
               title: args[:title],
               description: args[:description],
-              agent: args[:agent] || "SPECIALIST",
+              agent: args[:agent] || Agentf::AgentRoles::ENGINEER,
               tags: args[:tags] || [],
               context: args[:context].to_s,
               code_snippet: ""
