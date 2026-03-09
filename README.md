@@ -36,6 +36,8 @@ Or install directly:
 gem install agentf
 ```
 
+RubyGems package: https://rubygems.org/gems/agentf
+
 Agentf requires **Ruby >= 3.3.0**. If your system Ruby is older, use [rbenv](https://github.com/rbenv/rbenv) or [asdf](https://asdf-vm.com/) to manage versions. The repository ships a `.ruby-version` file pinned to 3.3.10.
 
 ### 3. Configure and Use
