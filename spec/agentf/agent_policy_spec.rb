@@ -32,4 +32,20 @@ RSpec.describe Agentf::AgentPolicy do
 
     expect(violations.first["code"]).to eq("missing_required_inputs")
   end
+
+  it "reports missing required outputs" do
+    boundaries = {
+      "required_outputs" => ["approved", "issues"]
+    }
+
+    violations = policy.validate(
+      agent_name: "REVIEWER",
+      boundaries: boundaries,
+      context: {},
+      result: { "approved" => true },
+      phase: :after
+    )
+
+    expect(violations.map { |v| v["code"] }).to include("missing_required_outputs")
+  end
 end

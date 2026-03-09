@@ -166,6 +166,10 @@ module Agentf
         enriched_context["expected_test_fix"] = @workflow_state.dig("tdd", "failure_signature")
       end
 
+      if agent_name == Agentf::AgentRoles::REVIEWER
+        enriched_context["execution"] = @workflow_state["results"].last&.fetch("result", {}) || {}
+      end
+
       result = @provider.execute_agent(
         agent_name: agent_name,
         task: @workflow_state["task"],
@@ -179,7 +183,8 @@ module Agentf
         agent_name: agent_name,
         boundaries: @agents.fetch(agent_name).class.policy_boundaries,
         context: enriched_context,
-        result: result
+        result: result,
+        phase: :after
       )
       append_policy_violations(policy_violations)
 

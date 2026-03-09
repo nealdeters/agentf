@@ -55,10 +55,35 @@ module Agentf
       def initialize(memory)
         @memory = memory
         @name = self.class.typed_name
+        @execution_contract = Agentf::AgentExecutionContract.new(
+          enabled: Agentf.config.agent_contract_enabled,
+          mode: Agentf.config.agent_contract_mode
+        )
       end
 
       def log(message)
         puts "\n[#{@name}] #{message}"
+      end
+
+      private
+
+      def execute_with_contract(context: {})
+        @execution_contract.before!(
+          agent_name: name,
+          boundaries: self.class.policy_boundaries,
+          context: context
+        )
+
+        result = yield
+
+        @execution_contract.after!(
+          agent_name: name,
+          boundaries: self.class.policy_boundaries,
+          context: context,
+          result: result
+        )
+
+        result
       end
     end
   end

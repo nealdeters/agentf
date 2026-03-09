@@ -48,7 +48,7 @@ module Agentf
           "always" => ["Return issue list and best practices", "Persist outcome as success or pitfall"],
           "ask_first" => ["Allowing known secret patterns in context"],
           "never" => ["Echo raw secrets in output"],
-          "required_inputs" => [],
+          "required_inputs" => ["task"],
           "required_outputs" => ["issues", "best_practices"]
         }
       end
@@ -59,30 +59,32 @@ module Agentf
       end
 
       def assess(task:, context: {})
-        log "Running security assessment"
+        execute_with_contract(context: context.merge("task" => task)) do
+          log "Running security assessment"
 
-        findings = @commands.scan(task: task, context: context)
-        summary = summarize_findings(findings)
+          findings = @commands.scan(task: task, context: context)
+          summary = summarize_findings(findings)
 
-        if findings["issues"].empty?
-          memory.store_success(
-            title: "Security review passed",
-            description: summary,
-            context: task,
-            tags: ["security", "pass"],
-            agent: name
-          )
-        else
-          memory.store_pitfall(
-            title: "Security findings detected",
-            description: summary,
-            context: task,
-            tags: ["security", "warning"],
-            agent: name
-          )
+          if findings["issues"].empty?
+            memory.store_success(
+              title: "Security review passed",
+              description: summary,
+              context: task,
+              tags: ["security", "pass"],
+              agent: name
+            )
+          else
+            memory.store_pitfall(
+              title: "Security findings detected",
+              description: summary,
+              context: task,
+              tags: ["security", "warning"],
+              agent: name
+            )
+          end
+
+          findings.merge("best_practices" => @commands.best_practices)
         end
-
-        findings.merge("best_practices" => @commands.best_practices)
       end
 
       private

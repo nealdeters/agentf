@@ -47,33 +47,35 @@ module Agentf
           "always" => ["Report approval decision", "Highlight known pitfalls in review findings"],
           "ask_first" => ["Approving with unresolved critical security issues"],
           "never" => ["Approve without any review evidence"],
-          "required_inputs" => [],
+          "required_inputs" => ["execution"],
           "required_outputs" => ["approved", "issues"]
         }
       end
 
       def review(subtask_result)
-        log "Reviewing subtask #{subtask_result['subtask_id']}"
+        execute_with_contract(context: { "execution" => subtask_result }) do
+          log "Reviewing subtask #{subtask_result['subtask_id']}"
 
-        pitfalls = memory.get_pitfalls(limit: 5)
-        memories = memory.get_recent_memories(limit: 5)
+          pitfalls = memory.get_pitfalls(limit: 5)
+          memories = memory.get_recent_memories(limit: 5)
 
-        issues = []
+          issues = []
 
-        pitfalls.each do |pitfall|
-          issues << "Warning: Known pitfall - #{pitfall['title']}" if pitfall["type"] == "pitfall"
+          pitfalls.each do |pitfall|
+            issues << "Warning: Known pitfall - #{pitfall['title']}" if pitfall["type"] == "pitfall"
+          end
+
+          approved = issues.empty?
+
+          if approved
+            log "Approved (no issues found)"
+          else
+            log "Issues found: #{issues.size}"
+            issues.each { |issue| log "  - #{issue}" }
+          end
+
+          { "approved" => approved, "issues" => issues }
         end
-
-        approved = issues.empty?
-
-        if approved
-          log "Approved (no issues found)"
-        else
-          log "Issues found: #{issues.size}"
-          issues.each { |issue| log "  - #{issue}" }
-        end
-
-        { "approved" => approved, "issues" => issues }
       end
     end
   end

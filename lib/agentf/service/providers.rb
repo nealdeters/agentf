@@ -125,6 +125,8 @@ module Agentf
           logger&.call("→ #{agent_name} Complete")
           result
         rescue StandardError => e
+          raise if e.is_a?(Agentf::AgentContractViolation)
+
           logger&.call("→ #{agent_name} Error: #{e.message}")
           { "error" => e.message, "agent" => agent_name }
         end

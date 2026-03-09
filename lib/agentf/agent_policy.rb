@@ -4,19 +4,34 @@ module Agentf
   class AgentPolicy
     REQUIRED_KEYS = %w[always ask_first never].freeze
 
-    def validate(agent_name:, boundaries:, context: {}, result: nil)
+    def validate(agent_name:, boundaries:, context: {}, result: nil, phase: :any)
       errors = []
       boundaries = normalize(boundaries)
 
-      required_inputs = Array(boundaries["required_inputs"])
-      missing_inputs = required_inputs.reject { |key| context.key?(key) }
-      unless missing_inputs.empty?
-        errors << violation(
-          code: "missing_required_inputs",
-          severity: "error",
-          message: "#{agent_name} missing required inputs: #{missing_inputs.join(', ')}",
-          agent: agent_name
-        )
+      if %i[any before].include?(phase)
+        required_inputs = Array(boundaries["required_inputs"])
+        missing_inputs = required_inputs.reject { |key| context.key?(key) }
+        unless missing_inputs.empty?
+          errors << violation(
+            code: "missing_required_inputs",
+            severity: "error",
+            message: "#{agent_name} missing required inputs: #{missing_inputs.join(', ')}",
+            agent: agent_name
+          )
+        end
+      end
+
+      if %i[any after].include?(phase)
+        required_outputs = Array(boundaries["required_outputs"])
+        missing_outputs = required_outputs.reject { |key| output_present?(result, key) }
+        unless missing_outputs.empty?
+          errors << violation(
+            code: "missing_required_outputs",
+            severity: "error",
+            message: "#{agent_name} missing required outputs: #{missing_outputs.join(', ')}",
+            agent: agent_name
+          )
+        end
       end
 
       if result.is_a?(Hash) && result["error"]
@@ -40,6 +55,14 @@ module Agentf
     end
 
     private
+
+    def output_present?(result, key)
+      return false unless result.is_a?(Hash)
+      return false unless result.key?(key)
+
+      value = result[key]
+      !value.nil?
+    end
 
     def violation(code:, severity:, message:, agent:)
       {

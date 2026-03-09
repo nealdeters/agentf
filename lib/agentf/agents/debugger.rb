@@ -48,8 +48,8 @@ module Agentf
           "always" => ["Return analysis with root causes and suggested fix", "Persist debugging lesson"],
           "ask_first" => ["Applying speculative fixes without reproducible error"],
           "never" => ["Discard stack trace context when available"],
-          "required_inputs" => [],
-          "required_outputs" => ["analysis"]
+          "required_inputs" => ["error_text"],
+          "required_outputs" => ["analysis", "success"]
         }
       end
 
@@ -59,32 +59,35 @@ module Agentf
       end
 
       def diagnose(error, context: nil)
-        log "Diagnosing error"
-        log "  Error: #{error[0..100]}..."
+        payload = { "error_text" => error, "context" => context }
+        execute_with_contract(context: payload) do
+          log "Diagnosing error"
+          log "  Error: #{error[0..100]}..."
 
-        analysis = @commands.parse_error(error)
+          analysis = @commands.parse_error(error)
 
-        memory.store_episode(
-          type: "lesson",
-          title: "Debugged: #{error[0..50]}...",
-          description: "Root cause: #{analysis.possible_causes.first}. Fix: #{analysis.suggested_fix}",
-          context: context.to_s,
-          tags: ["debugging", "error", "fix"],
-          agent: name
-        )
+          memory.store_episode(
+            type: "lesson",
+            title: "Debugged: #{error[0..50]}...",
+            description: "Root cause: #{analysis.possible_causes.first}. Fix: #{analysis.suggested_fix}",
+            context: context.to_s,
+            tags: ["debugging", "error", "fix"],
+            agent: name
+          )
 
-        log "Root cause: #{analysis.possible_causes.first}"
-        log "Suggested fix: #{analysis.suggested_fix}"
+          log "Root cause: #{analysis.possible_causes.first}"
+          log "Suggested fix: #{analysis.suggested_fix}"
 
-        {
-          "error" => error,
-          "analysis" => {
-            "error_type" => analysis.error_type,
-            "possible_causes" => analysis.possible_causes,
-            "suggested_fix" => analysis.suggested_fix,
-            "stack_trace" => analysis.stack_trace
+          {
+            "success" => true,
+            "analysis" => {
+              "error_type" => analysis.error_type,
+              "possible_causes" => analysis.possible_causes,
+              "suggested_fix" => analysis.suggested_fix,
+              "stack_trace" => analysis.stack_trace
+            }
           }
-        }
+        end
       end
     end
   end

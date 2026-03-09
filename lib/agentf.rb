@@ -15,7 +15,8 @@ module Agentf
   class Config
     attr_reader :redis_url
     attr_accessor :project_name, :base_path, :metrics_enabled, :workflow_contract_enabled,
-                  :workflow_contract_mode, :default_pack, :gem_path
+                  :workflow_contract_mode, :agent_contract_enabled, :agent_contract_mode,
+                  :default_pack, :gem_path
 
     def initialize
       @redis_url = normalize_redis_url(ENV.fetch("REDIS_URL", "redis://localhost:6379"))
@@ -28,6 +29,13 @@ module Agentf
       )
       @workflow_contract_mode = normalize_contract_mode(
         ENV.fetch("AGENTF_WORKFLOW_CONTRACT_MODE", "advisory")
+      )
+      @agent_contract_enabled = parse_boolean(
+        ENV.fetch("AGENTF_AGENT_CONTRACT_ENABLED", "true"),
+        default: true
+      )
+      @agent_contract_mode = normalize_contract_mode(
+        ENV.fetch("AGENTF_AGENT_CONTRACT_MODE", "enforcing")
       )
       @default_pack = ENV.fetch("AGENTF_DEFAULT_PACK", "generic").to_s.strip.downcase
       @gem_path = ENV.fetch("AGENTF_GEM_PATH", nil)
@@ -81,6 +89,7 @@ require_relative "agentf/service/providers"
 require_relative "agentf/context_builder"
 require_relative "agentf/packs"
 require_relative "agentf/agent_policy"
+require_relative "agentf/agent_execution_contract"
 require_relative "agentf/workflow_contract"
 require_relative "agentf/workflow_engine"
 require_relative "agentf/installer"

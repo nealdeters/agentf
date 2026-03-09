@@ -48,8 +48,8 @@ module Agentf
           "always" => ["Return generated component details", "Persist successful implementation pattern"],
           "ask_first" => ["Changing primary UI framework"],
           "never" => ["Return empty generated code for successful design task"],
-          "required_inputs" => [],
-          "required_outputs" => ["component", "generated_code"]
+          "required_inputs" => ["design_spec"],
+          "required_outputs" => ["component", "generated_code", "success"]
         }
       end
 
@@ -59,26 +59,29 @@ module Agentf
       end
 
       def implement_design(design_spec, framework: "react")
-        log "Implementing design: #{design_spec}"
+        execute_with_contract(context: { "design_spec" => design_spec, "framework" => framework }) do
+          log "Implementing design: #{design_spec}"
 
-        spec = @commands.generate_component("GeneratedComponent", design_spec)
+          spec = @commands.generate_component("GeneratedComponent", design_spec)
 
-        memory.store_success(
-          title: "Implemented design: #{design_spec}",
-          description: "Created #{spec.name} in #{spec.framework}",
-          context: "Framework: #{framework}",
-          tags: ["design", "ui", framework],
-          agent: name
-        )
+          memory.store_success(
+            title: "Implemented design: #{design_spec}",
+            description: "Created #{spec.name} in #{spec.framework}",
+            context: "Framework: #{framework}",
+            tags: ["design", "ui", framework],
+            agent: name
+          )
 
-        log "Created component: #{spec.name}"
+          log "Created component: #{spec.name}"
 
-        {
-          "design_spec" => design_spec,
-          "component" => spec.name,
-          "framework" => framework,
-          "generated_code" => spec.code
-        }
+          {
+            "design_spec" => design_spec,
+            "component" => spec.name,
+            "framework" => framework,
+            "generated_code" => spec.code,
+            "success" => true
+          }
+        end
       end
     end
   end

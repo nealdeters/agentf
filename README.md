@@ -74,6 +74,10 @@ agentf <command> help
 - `REDIS_URL` Redis connection string (default: `redis://localhost:6379`)
 - `AGENTF_PROJECT_NAME` project key used for memory isolation
 - `AGENTF_METRICS_ENABLED` enable/disable metrics (default: `true`)
+- `AGENTF_WORKFLOW_CONTRACT_ENABLED` enable/disable workflow stage checks (default: `true`)
+- `AGENTF_WORKFLOW_CONTRACT_MODE` workflow stage mode: `advisory|enforcing|off` (default: `advisory`)
+- `AGENTF_AGENT_CONTRACT_ENABLED` enable/disable per-agent pre/post checks (default: `true`)
+- `AGENTF_AGENT_CONTRACT_MODE` per-agent mode: `advisory|enforcing|off` (default: `enforcing`)
 - `AGENTF_GEM_PATH` optional gem root hint for OpenCode plugin binary resolution
 
 If Redis requires auth, include credentials in `REDIS_URL` (example: `redis://:password@localhost:6379`).
