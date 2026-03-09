@@ -353,7 +353,7 @@ module Agentf
     end
 
     def render_opencode_plugin
-      <<~TYPESCRIPT
+      <<~'TYPESCRIPT'
         import { execFile } from "node:child_process";
         import { promisify } from "node:util";
         import path from "node:path";
