@@ -362,44 +362,127 @@ module Agentf
 
         const execFileAsync = promisify(execFile);
 
-        async function resolveAgentfBinary(directory: string): Promise<string> {
+        type AgentfBinaryResolution = {
+          binaryPath: string;
+          source: string;
+          attempts: string[];
+        };
+
+        type PreflightCache = {
+          workspaceRoot: string;
+          binaryPath: string;
+        };
+
+        let preflightCache: PreflightCache | null = null;
+
+        function buildPreflightError(attempts: string[], extraDetails?: string): Error {
+          const lines = [
+            "Agentf plugin preflight failed: unable to run a compatible agentf binary.",
+            "",
+            "Resolution attempts:",
+            ...attempts.map((attempt) => `- ${attempt}`),
+            "",
+            "Remediation:",
+            "- Set AGENTF_GEM_PATH to your installed agentf gem path (contains bin/agentf).",
+            "- Ensure your Ruby version manager shims are on PATH (rbenv/asdf/mise), then retry.",
+            "- Verify with: agentf version",
+          ];
+
+          if (extraDetails) {
+            lines.push("", "Details:", extraDetails);
+          }
+
+          return new Error(lines.join("\n"));
+        }
+
+        function formatExecFailure(error: unknown): string {
+          const failure = error as {
+            message?: string;
+            stdout?: Buffer | string;
+            stderr?: Buffer | string;
+          };
+
+          const stdout = failure.stdout?.toString().trim();
+          const stderr = failure.stderr?.toString().trim();
+          const message = failure.message?.trim();
+          const parts = [
+            message ? `message: ${message}` : null,
+            stderr ? `stderr: ${stderr}` : null,
+            stdout ? `stdout: ${stdout}` : null,
+          ].filter(Boolean);
+
+          return parts.length > 0 ? parts.join("\n") : "No additional process output.";
+        }
+
+        async function resolveAgentfBinary(directory: string): Promise<AgentfBinaryResolution> {
+          const attempts: string[] = [];
           const gemPath = process.env.AGENTF_GEM_PATH;
           if (gemPath) {
             const binaryPath = path.join(gemPath, "bin", "agentf");
             if (fs.existsSync(binaryPath)) {
-              return binaryPath;
+              attempts.push(`AGENTF_GEM_PATH succeeded: ${binaryPath}`);
+              return { binaryPath, source: "AGENTF_GEM_PATH", attempts };
             }
+            attempts.push(`AGENTF_GEM_PATH set but missing executable: ${binaryPath}`);
+          } else {
+            attempts.push("AGENTF_GEM_PATH is not set");
           }
 
           const projectRoot = path.resolve(directory);
           const projectBinary = path.join(projectRoot, "bin", "agentf");
           if (fs.existsSync(projectBinary)) {
-            return projectBinary;
+            attempts.push(`Project bin fallback succeeded: ${projectBinary}`);
+            return { binaryPath: projectBinary, source: "project-bin", attempts };
           }
+          attempts.push(`Project bin fallback missing: ${projectBinary}`);
 
           try {
             const { stdout } = await execFileAsync("command", ["-v", "agentf"], { shell: true });
             const whichPath = stdout.toString().trim();
             if (whichPath && fs.existsSync(whichPath)) {
-              return whichPath;
+              attempts.push(`PATH fallback succeeded: ${whichPath}`);
+              return { binaryPath: whichPath, source: "PATH", attempts };
             }
+            attempts.push("PATH fallback returned empty or non-existent path");
           } catch {
-            // command -v failed
+            attempts.push("PATH fallback failed: command -v agentf did not resolve");
           }
 
-          throw new Error(
-            "agentf binary not found. Set AGENTF_GEM_PATH environment variable to the path where agentf gem is installed, " +
-            "or ensure bin/agentf exists in your project root. " +
-            "Example: AGENTF_GEM_PATH=$(bundle show agentf) opencode run \"your task\""
-          );
+          throw buildPreflightError(attempts);
+        }
+
+        async function ensureAgentfPreflight(directory: string): Promise<string> {
+          const workspaceRoot = path.resolve(directory);
+          if (preflightCache && preflightCache.workspaceRoot === workspaceRoot) {
+            return preflightCache.binaryPath;
+          }
+
+          const resolution = await resolveAgentfBinary(workspaceRoot);
+
+          try {
+            await execFileAsync(resolution.binaryPath, ["version"], {
+              cwd: workspaceRoot,
+              env: process.env,
+              maxBuffer: 1024 * 1024,
+            });
+          } catch (error) {
+            throw buildPreflightError(
+              resolution.attempts,
+              [`Resolved via ${resolution.source}: ${resolution.binaryPath}`, formatExecFailure(error)].join("\n")
+            );
+          }
+
+          preflightCache = { workspaceRoot, binaryPath: resolution.binaryPath };
+          return resolution.binaryPath;
         }
 
         async function runAgentfCli(directory: string, subcommand: string, command: string, args: string[]) {
-          const binaryPath = await resolveAgentfBinary(directory);
-          const commandArgs = ["exec", "ruby", binaryPath, subcommand, command, ...args, "--json"];
+          const workspaceRoot = path.resolve(directory);
+          const binaryPath = await ensureAgentfPreflight(workspaceRoot);
+          const commandArgs = [subcommand, command, ...args, "--json"];
 
-          const { stdout } = await execFileAsync("bundle", commandArgs, {
-            cwd: path.resolve(directory),
+          const { stdout } = await execFileAsync(binaryPath, commandArgs, {
+            cwd: workspaceRoot,
             env: process.env,
             maxBuffer: 1024 * 1024 * 5,
           });
@@ -409,6 +492,8 @@ module Agentf
         }
 
         export const agentfPlugin: Plugin = async () => {
+          await ensureAgentfPreflight(process.env.PWD || process.cwd());
+
           return {
             tools: {
               "agentf-code-glob": tool({

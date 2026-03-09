@@ -84,6 +84,23 @@ agentf help                      # show help
 
 Run `agentf <command> help` for detailed help on any subcommand. The CLI uses the same configuration/environment variables as the rest of Agentf, so be sure your `REDIS_URL` is set before running commands.
 
+### OpenCode Plugin Preflight
+
+When you run `agentf install --provider=opencode`, the generated `.opencode/plugins/agentf-plugin.ts` now performs a fail-fast preflight at startup:
+
+- Resolves `agentf` binary in this order: `AGENTF_GEM_PATH/bin/agentf` -> `<project>/bin/agentf` -> `PATH`
+- Runs `agentf version` once to verify the binary is executable
+- Caches successful resolution per workspace to avoid repeated checks
+- Fails early with fallback diagnostics and remediation guidance if no compatible binary is found
+
+Recommended verification:
+
+```bash
+agentf version
+```
+
+If your Ruby comes from a version manager, ensure its shims are available in every execution environment (terminal, IDE agent shell, CI).
+
 ### Memory Commands
 
 Available memory subcommands include `recent`, `pitfalls`, `lessons`, `successes`, `intents`, `business-intents`, `feature-intents`, `add-business-intent`, `add-feature-intent`, `add-lesson`, `add-success`, `add-pitfall`, `tags`, `search`, `summary`, `by-tag`, `by-agent`, `by-type`, `delete id`, `delete last`, and `delete all`.
@@ -404,6 +421,7 @@ pre-commit install
 - `AGENTF_WORKFLOW_CONTRACT_ENABLED` - Enable/disable workflow contract checks (default: `true`)
 - `AGENTF_WORKFLOW_CONTRACT_MODE` - Contract mode: `advisory`, `enforcing`, or `off` (default: `advisory`)
 - `AGENTF_DEFAULT_PACK` - Default workflow pack when context does not resolve one (default: `generic`)
+- `AGENTF_GEM_PATH` - Optional absolute path to the installed `agentf` gem root (used by OpenCode plugin binary resolution)
 - Any additional variables placed in `.env` are automatically loaded at runtime
 
 > **Note:** If you provide a `REDIS_URL` without a scheme (e.g. `redis-1234.example.com:6379`), Agentf will automatically prefix it with `redis://` for convenience.
