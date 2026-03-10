@@ -28,17 +28,31 @@ module Agentf
         agentf-architecture-analyze-layers
         agentf-memory-recent
         agentf-memory-search
+        agentf-memory-by-tag
+        agentf-memory-by-agent
+        agentf-memory-by-type
+        agentf-memory-tags
+        agentf-memory-pitfalls
+        agentf-memory-lessons
+        agentf-memory-successes
+        agentf-memory-intents
+        agentf-memory-business-intents
+        agentf-memory-feature-intents
         agentf-memory-neighbors
         agentf-memory-subgraph
         agentf-memory-add-lesson
         agentf-memory-add-success
         agentf-memory-add-pitfall
+        agentf-memory-add-business-intent
+        agentf-memory-add-feature-intent
       ].freeze
 
       WRITE_TOOLS = Set.new(%w[
         agentf-memory-add-lesson
         agentf-memory-add-success
         agentf-memory-add-pitfall
+        agentf-memory-add-business-intent
+        agentf-memory-add-feature-intent
       ]).freeze
 
       attr_reader :server, :guardrails
@@ -211,6 +225,160 @@ module Agentf
             mcp_server.send(:guard!, "agentf-memory-search", **args)
             result = reviewer.search(args[:query], limit: args[:limit] || 10)
             JSON.generate(result)
+          end
+        end
+
+        s.tool("agentf-memory-by-tag") do
+          description "Get memories by tag."
+          argument :tag, String, required: true, description: "Tag to filter"
+          argument :limit, Integer, required: false, description: "How many results to return (1-100)"
+          call do |args|
+            mcp_server.send(:guard!, "agentf-memory-by-tag", **args)
+            result = reviewer.get_by_tag(args[:tag], limit: args[:limit] || 10)
+            JSON.generate(result)
+          end
+        end
+
+        s.tool("agentf-memory-by-agent") do
+          description "Get memories by agent."
+          argument :agent, String, required: true, description: "Agent name"
+          argument :limit, Integer, required: false, description: "How many results to return (1-100)"
+          call do |args|
+            mcp_server.send(:guard!, "agentf-memory-by-agent", **args)
+            result = reviewer.get_by_agent(args[:agent], limit: args[:limit] || 10)
+            JSON.generate(result)
+          end
+        end
+
+        s.tool("agentf-memory-by-type") do
+          description "Get memories by type."
+          argument :type, String, required: true, description: "Memory type"
+          argument :limit, Integer, required: false, description: "How many results to return (1-100)"
+          call do |args|
+            mcp_server.send(:guard!, "agentf-memory-by-type", **args)
+            result = reviewer.get_by_type(args[:type], limit: args[:limit] || 10)
+            JSON.generate(result)
+          end
+        end
+
+        s.tool("agentf-memory-tags") do
+          description "List all unique memory tags."
+          call do |args|
+            mcp_server.send(:guard!, "agentf-memory-tags", **args)
+            result = reviewer.get_all_tags
+            JSON.generate(result)
+          end
+        end
+
+        s.tool("agentf-memory-pitfalls") do
+          description "List pitfall memories."
+          argument :limit, Integer, required: false, description: "How many results to return (1-100)"
+          call do |args|
+            mcp_server.send(:guard!, "agentf-memory-pitfalls", **args)
+            result = reviewer.get_pitfalls(limit: args[:limit] || 10)
+            JSON.generate(result)
+          end
+        end
+
+        s.tool("agentf-memory-lessons") do
+          description "List lesson memories."
+          argument :limit, Integer, required: false, description: "How many results to return (1-100)"
+          call do |args|
+            mcp_server.send(:guard!, "agentf-memory-lessons", **args)
+            result = reviewer.get_lessons(limit: args[:limit] || 10)
+            JSON.generate(result)
+          end
+        end
+
+        s.tool("agentf-memory-successes") do
+          description "List success memories."
+          argument :limit, Integer, required: false, description: "How many results to return (1-100)"
+          call do |args|
+            mcp_server.send(:guard!, "agentf-memory-successes", **args)
+            result = reviewer.get_successes(limit: args[:limit] || 10)
+            JSON.generate(result)
+          end
+        end
+
+        s.tool("agentf-memory-intents") do
+          description "List intents (business|feature)."
+          argument :kind, String, required: false, description: "Optional: business|feature"
+          argument :limit, Integer, required: false, description: "How many results to return (1-100)"
+          call do |args|
+            mcp_server.send(:guard!, "agentf-memory-intents", **args)
+            kind = args[:kind]
+            limit = args[:limit] || 10
+            result = case kind
+                     when "business"
+                       reviewer.get_business_intents(limit: limit)
+                     when "feature"
+                       reviewer.get_feature_intents(limit: limit)
+                     else
+                       reviewer.get_intents(limit: limit)
+                     end
+            JSON.generate(result)
+          end
+        end
+
+        s.tool("agentf-memory-business-intents") do
+          description "List business intents."
+          argument :limit, Integer, required: false, description: "How many results to return (1-100)"
+          call do |args|
+            mcp_server.send(:guard!, "agentf-memory-business-intents", **args)
+            result = reviewer.get_business_intents(limit: args[:limit] || 10)
+            JSON.generate(result)
+          end
+        end
+
+        s.tool("agentf-memory-feature-intents") do
+          description "List feature intents."
+          argument :limit, Integer, required: false, description: "How many results to return (1-100)"
+          call do |args|
+            mcp_server.send(:guard!, "agentf-memory-feature-intents", **args)
+            result = reviewer.get_feature_intents(limit: args[:limit] || 10)
+            JSON.generate(result)
+          end
+        end
+
+        s.tool("agentf-memory-add-business-intent") do
+          description "Store a business intent in Redis."
+          argument :title, String, required: true, description: "Intent title"
+          argument :description, String, required: true, description: "Intent description"
+          argument :tags, Array, required: false, items: String, description: "Tags"
+          argument :constraints, Array, required: false, items: String, description: "Constraints"
+          argument :priority, Integer, required: false, description: "Priority"
+          call do |args|
+            mcp_server.send(:guard!, "agentf-memory-add-business-intent", **args)
+            id = memory.store_business_intent(
+              title: args[:title],
+              description: args[:description],
+              tags: args[:tags] || [],
+              constraints: args[:constraints] || [],
+              priority: args[:priority] || 1
+            )
+            JSON.generate(id: id, type: "business_intent", status: "stored")
+          end
+        end
+
+        s.tool("agentf-memory-add-feature-intent") do
+          description "Store a feature intent in Redis."
+          argument :title, String, required: true, description: "Intent title"
+          argument :description, String, required: true, description: "Intent description"
+          argument :tags, Array, required: false, items: String, description: "Tags"
+          argument :acceptance, Array, required: false, items: String, description: "Acceptance criteria"
+          argument :non_goals, Array, required: false, items: String, description: "Non-goals"
+          argument :related_task_id, String, required: false, description: "Related task id"
+          call do |args|
+            mcp_server.send(:guard!, "agentf-memory-add-feature-intent", **args)
+            id = memory.store_feature_intent(
+              title: args[:title],
+              description: args[:description],
+              tags: args[:tags] || [],
+              acceptance_criteria: args[:acceptance] || [],
+              non_goals: args[:non_goals] || [],
+              related_task_id: args[:related_task_id]
+            )
+            JSON.generate(id: id, type: "feature_intent", status: "stored")
           end
         end
 

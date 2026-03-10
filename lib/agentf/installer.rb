@@ -25,8 +25,8 @@ module Agentf
       "store_lesson" => { cli: "agentf memory add-lesson \"<title>\" \"<description>\" --agent=<AGENT> --tags=learning", tool: "agentf-memory-add-lesson" },
       "store_success" => { cli: "agentf memory add-success \"<title>\" \"<description>\" --agent=<AGENT> --tags=success", tool: "agentf-memory-add-success" },
       "store_pitfall" => { cli: "agentf memory add-pitfall \"<title>\" \"<description>\" --agent=<AGENT> --tags=pitfall", tool: "agentf-memory-add-pitfall" },
-      "store_business_intent" => { cli: "agentf memory add-business-intent \"<title>\" \"<description>\" --tags=strategy", tool: "agentf-memory-add-lesson" },
-      "store_feature_intent" => { cli: "agentf memory add-feature-intent \"<title>\" \"<description>\" --acceptance=\"<criteria>\"", tool: "agentf-memory-add-lesson" }
+      "store_business_intent" => { cli: "agentf memory add-business-intent \"<title>\" \"<description>\" --tags=strategy", tool: "agentf-memory-add-business-intent" },
+      "store_feature_intent" => { cli: "agentf memory add-feature-intent \"<title>\" \"<description>\" --acceptance=\"<criteria>\"", tool: "agentf-memory-add-feature-intent" }
     }.freeze
 
     PROVIDER_LAYOUTS = {
@@ -629,6 +629,165 @@ module Agentf
                 async execute(args, context) {
                   const limit = args.limit ?? 10;
                   return runAgentfCli(context.directory, "memory", "search", [args.query, "-n", String(limit)]);
+                },
+              }),
+              "agentf-memory-by-tag": tool({
+                description: "Get Agentf memories by tag.",
+                args: {
+                  tag: tool.schema.string().describe("Tag to filter by"),
+                  limit: tool.schema.number().int().min(1).max(100).optional().describe("How many results to return"),
+                },
+                async execute(args, context) {
+                  const limit = args.limit ?? 10;
+                  return runAgentfCli(context.directory, "memory", "by-tag", [args.tag, "-n", String(limit)]);
+                },
+              }),
+              "agentf-memory-by-agent": tool({
+                description: "Get Agentf memories by agent.",
+                args: {
+                  agent: tool.schema.string().describe("Agent name"),
+                  limit: tool.schema.number().int().min(1).max(100).optional().describe("How many results to return"),
+                },
+                async execute(args, context) {
+                  const limit = args.limit ?? 10;
+                  return runAgentfCli(context.directory, "memory", "by-agent", [args.agent, "-n", String(limit)]);
+                },
+              }),
+              "agentf-memory-by-type": tool({
+                description: "Get Agentf memories by type.",
+                args: {
+                  type: tool.schema.string().describe("Memory type (pitfall|lesson|success|business_intent|feature_intent)"),
+                  limit: tool.schema.number().int().min(1).max(100).optional().describe("How many results to return"),
+                },
+                async execute(args, context) {
+                  const limit = args.limit ?? 10;
+                  return runAgentfCli(context.directory, "memory", "by-type", [args.type, "-n", String(limit)]);
+                },
+              }),
+              "agentf-memory-tags": tool({
+                description: "List all unique memory tags.",
+                args: {},
+                async execute(_args, context) {
+                  return runAgentfCli(context.directory, "memory", "tags", []);
+                },
+              }),
+              "agentf-memory-pitfalls": tool({
+                description: "List pitfall memories.",
+                args: { limit: tool.schema.number().int().min(1).max(100).optional() },
+                async execute(args, context) {
+                  const limit = args.limit ?? 10;
+                  return runAgentfCli(context.directory, "memory", "pitfalls", ["-n", String(limit)]);
+                },
+              }),
+              "agentf-memory-lessons": tool({
+                description: "List lesson memories.",
+                args: { limit: tool.schema.number().int().min(1).max(100).optional() },
+                async execute(args, context) {
+                  const limit = args.limit ?? 10;
+                  return runAgentfCli(context.directory, "memory", "lessons", ["-n", String(limit)]);
+                },
+              }),
+              "agentf-memory-successes": tool({
+                description: "List success memories.",
+                args: { limit: tool.schema.number().int().min(1).max(100).optional() },
+                async execute(args, context) {
+                  const limit = args.limit ?? 10;
+                  return runAgentfCli(context.directory, "memory", "successes", ["-n", String(limit)]);
+                },
+              }),
+              "agentf-memory-intents": tool({
+                description: "List intents (business, feature or both).",
+                args: { kind: tool.schema.string().optional(), limit: tool.schema.number().int().min(1).max(100).optional() },
+                async execute(args, context) {
+                  const limit = args.limit ?? 10;
+                  const kind = args.kind ? String(args.kind) : "";
+                  const cmdArgs = kind ? [kind, "-n", String(limit)] : ["-n", String(limit)];
+                  return runAgentfCli(context.directory, "memory", "intents", cmdArgs);
+                },
+              }),
+              "agentf-memory-business-intents": tool({
+                description: "List business intents.",
+                args: { limit: tool.schema.number().int().min(1).max(100).optional() },
+                async execute(args, context) {
+                  const limit = args.limit ?? 10;
+                  return runAgentfCli(context.directory, "memory", "business-intents", ["-n", String(limit)]);
+                },
+              }),
+              "agentf-memory-feature-intents": tool({
+                description: "List feature intents.",
+                args: { limit: tool.schema.number().int().min(1).max(100).optional() },
+                async execute(args, context) {
+                  const limit = args.limit ?? 10;
+                  return runAgentfCli(context.directory, "memory", "feature-intents", ["-n", String(limit)]);
+                },
+              }),
+              "agentf-memory-add-business-intent": tool({
+                description: "Store a business intent in Redis.",
+                args: {
+                  title: tool.schema.string(),
+                  description: tool.schema.string(),
+                  tags: tool.schema.array(tool.schema.string()).optional(),
+                  constraints: tool.schema.array(tool.schema.string()).optional(),
+                  priority: tool.schema.number().int().optional(),
+                },
+                async execute(args, context) {
+                  const commandArgs = [args.title, args.description];
+                  if (args.tags?.length) commandArgs.push(`--tags=${args.tags.join(",")}`);
+                  if (args.constraints?.length) commandArgs.push(`--constraints=${args.constraints.join(";")}`);
+                  if (Number.isInteger(args.priority)) commandArgs.push(`--priority=${String(args.priority)}`);
+                  return runAgentfCli(context.directory, "memory", "add-business-intent", commandArgs);
+                },
+              }),
+              "agentf-memory-add-feature-intent": tool({
+                description: "Store a feature intent in Redis.",
+                args: {
+                  title: tool.schema.string(),
+                  description: tool.schema.string(),
+                  tags: tool.schema.array(tool.schema.string()).optional(),
+                  acceptance: tool.schema.array(tool.schema.string()).optional(),
+                  non_goals: tool.schema.array(tool.schema.string()).optional(),
+                  related_task_id: tool.schema.string().optional(),
+                },
+                async execute(args, context) {
+                  const commandArgs = [args.title, args.description];
+                  if (args.tags?.length) commandArgs.push(`--tags=${args.tags.join(",")}`);
+                  if (args.acceptance?.length) commandArgs.push(`--acceptance=${args.acceptance.join(";")}`);
+                  if (args.non_goals?.length) commandArgs.push(`--non-goals=${args.non_goals.join(";")}`);
+                  if (args.related_task_id) commandArgs.push(`--task=${args.related_task_id}`);
+                  return runAgentfCli(context.directory, "memory", "add-feature-intent", commandArgs);
+                },
+              }),
+              "agentf-memory-neighbors": tool({
+                description: "Get neighboring memory nodes by edge traversal.",
+                args: {
+                  node_id: tool.schema.string(),
+                  relation: tool.schema.string().optional(),
+                  depth: tool.schema.number().int().optional(),
+                  limit: tool.schema.number().int().optional(),
+                },
+                async execute(args, context) {
+                  const commandArgs = [args.node_id];
+                  if (args.relation) commandArgs.push(`--relation=${args.relation}`);
+                  if (Number.isInteger(args.depth)) commandArgs.push(`--depth=${String(args.depth)}`);
+                  if (Number.isInteger(args.limit)) commandArgs.push(`-n`, String(args.limit));
+                  return runAgentfCli(context.directory, "memory", "neighbors", commandArgs);
+                },
+              }),
+              "agentf-memory-subgraph": tool({
+                description: "Build a subgraph from seed ids.",
+                args: {
+                  seed_ids: tool.schema.array(tool.schema.string()),
+                  relation_filters: tool.schema.array(tool.schema.string()).optional(),
+                  depth: tool.schema.number().int().optional(),
+                  limit: tool.schema.number().int().optional(),
+                },
+                async execute(args, context) {
+                  const seeds = (args.seed_ids || []).join(",");
+                  const commandArgs = [seeds];
+                  if (args.relation_filters?.length) commandArgs.push(`--relation=${args.relation_filters.join(",")}`);
+                  if (Number.isInteger(args.depth)) commandArgs.push(`--depth=${String(args.depth)}`);
+                  if (Number.isInteger(args.limit)) commandArgs.push(`-n`, String(args.limit));
+                  return runAgentfCli(context.directory, "memory", "subgraph", commandArgs);
                 },
               }),
               "agentf-memory-add-lesson": tool({
