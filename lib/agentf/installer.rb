@@ -2,6 +2,8 @@
 
 require "fileutils"
 require "yaml"
+require "open3"
+require "json"
 
 module Agentf
   class Installer
@@ -44,10 +46,12 @@ module Agentf
       }
     }.freeze
 
-    def initialize(global_root: Dir.home, local_root: Dir.pwd, dry_run: false)
+    def initialize(global_root: Dir.home, local_root: Dir.pwd, dry_run: false, verbose: false, install_deps: true)
       @global_root = global_root
       @local_root = local_root
       @dry_run = dry_run
+      @verbose = verbose
+      @install_deps = install_deps
     end
 
     def install(
@@ -74,12 +78,60 @@ module Agentf
       end
 
       writes = []
-      roots_for(scope).each do |root|
+      roots = roots_for(scope)
+      roots.each do |root|
         writes.concat(write_agents(root: root, layout: layout, provider: provider, only_agents: only_agents))
         writes.concat(write_commands(root: root, layout: layout, provider: provider, only_commands: only_commands))
         writes.concat(write_opencode_helpers(root: root)) if provider.to_s == "opencode"
       end
+
+      # Optionally install dependencies for opencode helper package.json
+      if provider.to_s == "opencode" && @install_deps
+        roots.each do |root|
+          package_json_path = File.join(root, ".opencode/package.json")
+          if @dry_run
+            # In dry-run, report that package.json would be written/installed
+            writes << write_manifest(package_json_path, render_opencode_package_json)
+          else
+            result = install_deps_in(root)
+            writes << result if result
+          end
+        end
+      end
+
       writes
+    end
+
+    def install_deps_in(root)
+      pkg_dir = File.join(root, ".opencode")
+      pkg_json = File.join(pkg_dir, "package.json")
+      unless File.exist?(pkg_json)
+        warn "No .opencode/package.json at #{pkg_json}, skipping install" if @verbose
+        return { "path" => pkg_json, "status" => "skipped", "reason" => "missing package.json" }
+      end
+
+      managers = [
+        { cmd: ["bun", "install"], check: ["bun", "--version"] },
+        { cmd: ["npm", "install"], check: ["npm", "--version"] },
+        { cmd: ["yarn", "install"], check: ["yarn", "--version"] }
+      ]
+
+      managers.each do |m|
+        stdout, stderr, status = Open3.capture3(*m[:check])
+        next unless status.success?
+
+        puts "Running #{m[:cmd].first} install in #{pkg_dir}" if @verbose
+        out, err, st = Open3.capture3(*m[:cmd], chdir: pkg_dir)
+        if st.success?
+          puts out if @verbose && !out.to_s.strip.empty?
+          return { "path" => pkg_dir, "status" => "installed", "manager" => m[:cmd].first }
+        else
+          warn "Install with #{m[:cmd].first} failed: #{err}" unless @verbose
+          return { "path" => pkg_dir, "status" => "error", "manager" => m[:cmd].first, "error" => err }
+        end
+      end
+
+      { "path" => pkg_dir, "status" => "no_manager_found" }
     end
 
     def roots_for(scope)
@@ -124,13 +176,15 @@ module Agentf
         render_opencode_plugin
       )
       writes << write_manifest(
+        File.join(root, ".opencode/tsconfig.json"),
+        render_opencode_tsconfig
+      )
+      writes << write_package_json(root)
+      writes << write_manifest(
         File.join(root, ".opencode/memory/agentf-redis-schema.md"),
         render_opencode_memory_schema
       )
-      writes << write_manifest(
-        File.join(root, "opencode.json"),
-        render_opencode_json
-      )
+      writes << write_opencode_json(root)
       writes
     end
 
@@ -151,11 +205,21 @@ module Agentf
     end
 
     def write_manifest(path, payload)
-      return { "path" => path, "status" => "planned" } if @dry_run
+      if @dry_run
+        return { "path" => path, "status" => "planned" }
+      end
 
       FileUtils.mkdir_p(File.dirname(path))
-      File.write(path, payload)
-      { "path" => path, "status" => "written" }
+      begin
+        File.write(path, payload)
+        if @verbose
+          puts "WROTE: #{path}"
+        end
+        { "path" => path, "status" => "written" }
+      rescue StandardError => e
+        warn "ERROR writing #{path}: #{e.message}"
+        { "path" => path, "status" => "error", "error" => e.message }
+      end
     end
 
     def render_agent_manifest(klass, provider:)
@@ -354,11 +418,12 @@ module Agentf
 
     def render_opencode_plugin
       <<~'TYPESCRIPT'
-        import { execFile } from "node:child_process";
-        import { promisify } from "node:util";
-        import path from "node:path";
-        import { type Plugin, tool } from "@opencode-ai/plugin/tool";
-        import fs from "node:fs";
+        // tools:
+        import { execFile } from "child_process";
+        import { promisify } from "util";
+        import path from "path";
+        import { type Plugin, tool } from "@opencode-ai/plugin";
+        import fs from "fs";
 
         const execFileAsync = promisify(execFile);
 
@@ -495,7 +560,7 @@ module Agentf
           await ensureAgentfPreflight(process.env.PWD || process.cwd());
 
           return {
-            tools: {
+            tool: {
               "agentf-code-glob": tool({
                 description: "Find files using project glob patterns via Agentf code CLI.",
                 args: {
@@ -632,9 +697,79 @@ module Agentf
       <<~JSON
         {
           "$schema": "https://opencode.ai/config.json",
-          "plugin": ["./opencode/plugins/agentf-plugin"]
+          "plugin": ["./.opencode/plugins/agentf-plugin"]
         }
       JSON
+    end
+
+    def write_opencode_json(root)
+      path = File.join(root, "opencode.json")
+      new_content = JSON.parse(render_opencode_json)
+
+      return write_manifest(path, JSON.pretty_generate(new_content)) unless File.exist?(path)
+
+      begin
+        existing = JSON.parse(File.read(path))
+      rescue StandardError => e
+        warn "Failed to parse existing opencode.json: #{e.message}"
+        return write_manifest(path, JSON.pretty_generate(new_content))
+      end
+
+      merged = existing.dup
+      merged_plugins = Array(existing["plugin"]) + Array(new_content["plugin"])
+      merged["plugin"] = merged_plugins.uniq
+
+      write_manifest(path, JSON.pretty_generate(merged))
+    end
+
+    def render_opencode_tsconfig
+      <<~JSON
+        {
+          "compilerOptions": {
+            "target": "ESNext",
+            "module": "ESNext",
+            "moduleResolution": "bundler",
+            "types": ["node"],
+            "strict": true,
+            "skipLibCheck": true,
+            "baseUrl": ".",
+            "paths": {
+              "@opencode-ai/plugin": ["./node_modules/@opencode-ai/plugin"]
+            }
+          },
+          "include": ["plugins/**/*.ts"]
+        }
+      JSON
+    end
+
+    def render_opencode_package_json
+      <<~JSON
+        {
+          "name": "agentf-opencode-helpers",
+          "private": true,
+          "dependencies": {
+            "@opencode-ai/plugin": "^1.2.24"
+          },
+          "devDependencies": {
+            "@types/node": "^25.4.0"
+          }
+        }
+      JSON
+    end
+
+    def write_package_json(root)
+      package_json_path = File.join(root, ".opencode/package.json")
+      new_content = render_opencode_package_json
+      return write_manifest(package_json_path, new_content) unless File.exist?(package_json_path)
+
+      existing = JSON.parse(File.read(package_json_path))
+      new_package_json = JSON.parse(new_content)
+
+      merged = existing.dup
+      merged["dependencies"] = (existing["dependencies"] || {}).merge(new_package_json["dependencies"] || {})
+      merged["devDependencies"] = (existing["devDependencies"] || {}).merge(new_package_json["devDependencies"] || {})
+
+      write_manifest(package_json_path, JSON.pretty_generate(merged))
     end
 
     def render_opencode_memory_schema

@@ -22,7 +22,7 @@ Gem::Specification.new do |spec|
   spec.metadata["source_code_uri"] = "https://github.com/nealdeters/agentf"
   spec.metadata["rubygems_mfa_required"] = "true"
 
-  spec.files         = Dir.glob("lib/**/*.rb") + Dir.glob("bin/*")
+  spec.files         = Dir.glob("lib/**/*.rb") + Dir.glob("bin/*") + Dir.glob(".opencode/**/*")
   spec.require_paths = ["lib"]
 
   spec.executables   = ["agentf"]

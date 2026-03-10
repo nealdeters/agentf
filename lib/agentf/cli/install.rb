@@ -16,6 +16,7 @@ module Agentf
           global_root: Dir.home,
           local_root: Dir.pwd,
           dry_run: false,
+          install_deps: true,
           only_agents: nil,
           only_commands: nil
         }
@@ -32,7 +33,9 @@ module Agentf
         installer = Agentf::Installer.new(
           global_root: @options[:global_root],
           local_root: @options[:local_root],
-          dry_run: @options[:dry_run]
+          dry_run: @options[:dry_run],
+          install_deps: @options[:install_deps],
+          verbose: @options.fetch(:verbose, false)
         )
 
         results = installer.install(
@@ -66,6 +69,9 @@ module Agentf
         scope_val = parse_single_option(args, "--scope=") || parse_single_option(args, "-s=")
         @options[:scope] = scope_val.downcase if scope_val
 
+        # Extract --install-deps flag
+        @options[:install_deps] = !args.delete("--install-deps").nil?
+
         # Extract --global-root and --local-root
         global_root = parse_single_option(args, "--global-root=")
         @options[:global_root] = File.expand_path(global_root) if global_root
@@ -83,6 +89,9 @@ module Agentf
         if command_val
           @options[:only_commands] = command_val.split(",").map { |item| item.strip.downcase }.reject(&:empty?)
         end
+
+        # Extract --verbose flag
+        @options[:verbose] = !args.delete("--verbose").nil?
       end
 
       def show_help

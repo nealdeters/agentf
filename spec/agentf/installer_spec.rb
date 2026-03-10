@@ -2,6 +2,7 @@
 
 require "tmpdir"
 require "fileutils"
+require "json"
 
 RSpec.describe Agentf::Installer do
   let(:global_root) { Dir.mktmpdir("agentf-global") }
@@ -91,6 +92,31 @@ RSpec.describe Agentf::Installer do
       expect(File.read(memory_schema)).to include("# Redis Memory Schema")
       expect(File.read(opencode_json)).to include('"plugin"')
       expect(File.read(opencode_json)).to include("agentf-plugin")
+    end
+
+    it "merges opencode.json plugin entries instead of overwriting" do
+      # create an existing opencode.json with a different plugin
+      existing = {
+        "$schema" => "https://opencode.ai/config.json",
+        "plugin" => ["./.opencode/plugins/other-plugin"]
+      }
+      File.write(File.join(local_root, "opencode.json"), JSON.pretty_generate(existing))
+
+      installer = described_class.new(global_root: global_root, local_root: local_root)
+      installer.install(providers: ["opencode"], scope: "local", only_agents: ["planner"], only_commands: ["debugger"])
+
+      merged = JSON.parse(File.read(File.join(local_root, "opencode.json")))
+      expect(merged["plugin"]).to include("./.opencode/plugins/other-plugin")
+      expect(merged["plugin"]).to include("./.opencode/plugins/agentf-plugin")
+      expect(merged["plugin"].length).to eq(2)
+    end
+
+    it "can install deps when install_deps is true (skips if no package.json)" do
+      installer = described_class.new(global_root: global_root, local_root: local_root, install_deps: true)
+
+      # No .opencode/package.json exists, should skip gracefully
+      results = installer.install(providers: ["opencode"], scope: "local")
+      expect(results).to satisfy { |arr| arr.any? { |r| r["status"] == "skipped" || r["status"] == "no_manager_found" || r["status"] == "installed" } }
     end
 
     it "supports dry-run mode without writing files" do

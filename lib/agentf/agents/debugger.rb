@@ -80,6 +80,7 @@ module Agentf
 
           {
             "success" => true,
+            "error" => nil,
             "analysis" => {
               "error_type" => analysis.error_type,
               "possible_causes" => analysis.possible_causes,
