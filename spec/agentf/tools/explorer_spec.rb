@@ -16,7 +16,7 @@ RSpec.describe Agentf::Commands::Explorer do
       expect(files).to eq([])
     end
 
-    it "filters by file type" do
+    it "filters by file type"  , :aggregate_failures do
       files = explorer.glob("**/*.rb", file_types: ["rb"])
       expect(files).not_to be_empty
       files.each { |f| expect(f).to end_with(".rb") }
@@ -59,7 +59,7 @@ RSpec.describe Agentf::Commands::Explorer do
   end
 
   describe "#get_file_tree" do
-    it "returns directory structure" do
+    it "returns directory structure"  , :aggregate_failures do
       tree = explorer.get_file_tree(max_depth: 2)
       expect(tree).to have_key("type")
       expect(tree).to have_key("children")
@@ -96,7 +96,7 @@ RSpec.describe Agentf::Commands::Explorer do
       expect(result).to have_key("error")
     end
 
-    it "includes imported_by and tests keys" do
+    it "includes imported_by and tests keys"  , :aggregate_failures do
       result = explorer.find_related_files("app/models/user.rb")
 
       expect(result).to have_key("imported_by")

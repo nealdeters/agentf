@@ -14,7 +14,7 @@ RSpec.describe Agentf::Agents::Security do
   end
 
   describe "#assess" do
-    it "stores success when no issues found" do
+    it "stores success when no issues found"  , :aggregate_failures do
       allow(commands).to receive(:scan).and_return("issues" => [], "score" => 0, "recommendations" => [])
 
       result = agent.assess(task: "Build", context: {})
@@ -24,7 +24,7 @@ RSpec.describe Agentf::Agents::Security do
       expect(result["best_practices"]).to include("Use secret scanning")
     end
 
-    it "stores pitfall when issues are detected" do
+    it "stores pitfall when issues are detected"  , :aggregate_failures do
       issues = [{ "issue" => "Potential Secret", "detail" => "detected" }]
       allow(commands).to receive(:scan).and_return("issues" => issues, "score" => 1, "recommendations" => [])
 

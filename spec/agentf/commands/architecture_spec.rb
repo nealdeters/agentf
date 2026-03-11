@@ -5,7 +5,7 @@ RSpec.describe Agentf::Commands::Architecture do
   subject(:architecture) { described_class.new(base_path: base_path) }
 
   describe ".manifest" do
-    it "exposes architecture command metadata" do
+    it "exposes architecture command metadata"  , :aggregate_failures do
       manifest = described_class.manifest
       expect(manifest["name"]).to eq("architecture")
       names = manifest["commands"].map { |cmd| cmd["name"] }
@@ -14,7 +14,7 @@ RSpec.describe Agentf::Commands::Architecture do
   end
 
   describe "#analyze_layers" do
-    it "returns layer summary" do
+    it "returns layer summary"  , :aggregate_failures do
       result = architecture.analyze_layers
       expect(result).to have_key("layers")
       expect(result).to have_key("layer_balance_score")
@@ -22,7 +22,7 @@ RSpec.describe Agentf::Commands::Architecture do
   end
 
   describe "#plan_gradual_adoption" do
-    it "returns ordered rollout steps" do
+    it "returns ordered rollout steps"  , :aggregate_failures do
       result = architecture.plan_gradual_adoption(goal: "adopt layered rails")
       expect(result["goal"]).to eq("adopt layered rails")
       expect(result["steps"]).not_to be_empty

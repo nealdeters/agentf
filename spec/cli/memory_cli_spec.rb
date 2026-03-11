@@ -42,7 +42,7 @@ RSpec.describe Agentf::CLI::Memory do
         .to_stdout
     end
 
-    it "returns JSON when requested" do
+    it "returns JSON when requested"  , :aggregate_failures do
       allow(reviewer).to receive(:get_recent_memories).with(limit: 10).and_return(
         "count" => 1,
         "memories" => [{ "type" => "lesson", "title" => "A", "created_at" => "x", "agent" => "PLANNER" }]
@@ -189,7 +189,7 @@ RSpec.describe Agentf::CLI::Memory do
       end.to output(include("Stored pitfall: episode_pitfall")).to_stdout
     end
 
-    it "stores lesson memory with JSON output" do
+    it "stores lesson memory with JSON output"  , :aggregate_failures do
       allow(memory).to receive(:store_episode).and_return("episode_json")
 
       output = capture_stdout do

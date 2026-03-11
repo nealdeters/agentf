@@ -5,7 +5,7 @@ RSpec.describe Agentf::Commands::MemoryReviewer do
   let(:memory) { instance_double(Agentf::Memory::RedisMemory) }
 
   describe "#get_lessons" do
-    it "returns lessons via get_memories_by_type instead of filtering recent" do
+    it "returns lessons via get_memories_by_type instead of filtering recent"  , :aggregate_failures do
       lessons = 2.times.map do |i|
         { "id" => "episode_l#{i}", "type" => "lesson", "title" => "Lesson #{i}", "description" => "A lesson", "tags" => ["test"], "agent" => "PLANNER", "created_at" => Time.now.to_i }
       end
@@ -32,7 +32,7 @@ RSpec.describe Agentf::Commands::MemoryReviewer do
   end
 
   describe "#get_successes" do
-    it "returns successes via get_memories_by_type instead of filtering recent" do
+    it "returns successes via get_memories_by_type instead of filtering recent"  , :aggregate_failures do
       successes = 2.times.map do |i|
         { "id" => "episode_s#{i}", "type" => "success", "title" => "Success #{i}", "description" => "A success", "tags" => ["test"], "agent" => "QA_TESTER", "created_at" => Time.now.to_i }
       end
@@ -47,7 +47,7 @@ RSpec.describe Agentf::Commands::MemoryReviewer do
   end
 
   describe "#get_pitfalls" do
-    it "returns pitfalls" do
+    it "returns pitfalls"  , :aggregate_failures do
       pitfalls = [
         { "id" => "episode_p1", "type" => "pitfall", "title" => "Bug", "description" => "Something broke", "tags" => ["test"], "agent" => "ENGINEER", "created_at" => Time.now.to_i }
       ]
@@ -62,7 +62,7 @@ RSpec.describe Agentf::Commands::MemoryReviewer do
   end
 
   describe "#get_recent_memories" do
-    it "returns recent memories" do
+    it "returns recent memories"  , :aggregate_failures do
       recent = [
         { "id" => "episode_l", "type" => "lesson", "title" => "Lesson", "description" => "desc", "tags" => [], "agent" => "PLANNER", "created_at" => Time.now.to_i }
       ]
@@ -77,7 +77,7 @@ RSpec.describe Agentf::Commands::MemoryReviewer do
   end
 
   describe "#get_all_tags" do
-    it "returns unique tags" do
+    it "returns unique tags"  , :aggregate_failures do
       tags = %w[ruby testing]
       allow(memory).to receive(:get_all_tags).and_return(tags)
       reviewer = described_class.new(project: project, memory: memory)
@@ -134,7 +134,7 @@ RSpec.describe Agentf::Commands::MemoryReviewer do
   end
 
   describe "#search" do
-    it "searches memories by keyword" do
+    it "searches memories by keyword"  , :aggregate_failures do
       mems = [
         { "id" => "e1", "type" => "lesson", "title" => "Redis caching strategy", "description" => "Use Redis for sessions", "context" => "", "tags" => [], "agent" => "PLANNER", "created_at" => Time.now.to_i },
         { "id" => "e2", "type" => "lesson", "title" => "SQL optimization", "description" => "Index columns", "context" => "", "tags" => [], "agent" => "PLANNER", "created_at" => Time.now.to_i }
@@ -153,7 +153,7 @@ RSpec.describe Agentf::Commands::MemoryReviewer do
   end
 
   describe "#get_summary" do
-    it "includes intent types in by_type breakdown" do
+    it "includes intent types in by_type breakdown"  , :aggregate_failures do
       mems = [
         { "id" => "biz1", "type" => "business_intent", "title" => "Biz", "description" => "Intent", "tags" => [], "agent" => "PLANNER", "created_at" => Time.now.to_i },
         { "id" => "l1", "type" => "lesson", "title" => "L", "description" => "d", "tags" => [], "agent" => "PLANNER", "created_at" => Time.now.to_i }

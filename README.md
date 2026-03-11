@@ -15,7 +15,13 @@ It helps you install provider manifests, run workflows, inspect memory, and expo
 docker run -d -p 6379:6379 redis/redis-stack:latest
 ```
 
-2) Install the gem
+2) Install the gem (local development)
+
+```bash
+bundle exec rake install
+```
+
+Or install the released gem:
 
 ```bash
 gem install agentf
@@ -30,20 +36,20 @@ agentf help
 
 ## 60-second quick start
 
-Set environment variables (or create a `.env` file):
+Set environment variables (or create a `.env` file). Example:
 
 ```bash
 export REDIS_URL=redis://localhost:6379
 export AGENTF_PROJECT_NAME=my-project
 ```
 
-Install provider manifests:
+Install provider manifests (example providers shown):
 
 ```bash
-agentf install --provider=opencode,copilot
+agentf install --provider=opencode,copilot --scope=local
 ```
 
-Try useful commands:
+Try useful commands after install:
 
 ```bash
 agentf memory recent -n 5
@@ -80,9 +86,6 @@ agentf <command> help
 - `AGENTF_AGENT_CONTRACT_MODE` per-agent mode: `advisory|enforcing|off` (default: `enforcing`)
 - `AGENTF_GEM_PATH` optional gem root hint for OpenCode plugin binary resolution
 
-- Note: `AGENTF_DEFAULT_PACK` is no longer used. Profiles are now embedded in the orchestrator
-  and selected via workflow context or the orchestrator's inference logic.
-
 If Redis requires auth, include credentials in `REDIS_URL` (example: `redis://:password@localhost:6379`).
 
 ## Docs
@@ -92,10 +95,15 @@ If Redis requires auth, include credentials in `REDIS_URL` (example: `redis://:p
 
 ## Development
 
+Run dependencies and the test suite locally:
+
 ```bash
 bundle install
 bundle exec rspec spec/
 ```
+
+When making changes to the CLI or gemspec use `bundle exec rake install` to
+install the locally built gem into your system Ruby gems for manual testing.
 
 ## License
 

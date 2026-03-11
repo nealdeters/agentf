@@ -16,7 +16,7 @@ RSpec.describe Agentf::Agents::Base do
     expect(agent).to respond_to(:log)
   end
 
-  it "exposes policy boundaries" do
+  it "exposes policy boundaries"  , :aggregate_failures do
     boundaries = agent.class.policy_boundaries
     expect(boundaries).to have_key("always")
     expect(boundaries).to have_key("ask_first")
@@ -29,21 +29,21 @@ RSpec.describe Agentf::Agents::Architect do
   subject(:architect) { described_class.new(memory) }
 
   describe "#plan_task" do
-    it "creates a plan with subtasks" do
+    it "creates a plan with subtasks"  , :aggregate_failures do
       result = architect.plan_task("Build authentication system")
 
       expect(result).to have_key("subtasks")
       expect(result["subtasks"]).not_to be_empty
     end
 
-    it "retrieves relevant memories" do
+    it "retrieves relevant memories"  , :aggregate_failures do
       expect(memory).to receive(:get_recent_memories).with(limit: 5)
       expect(memory).to receive(:get_pitfalls).with(limit: 3)
 
       architect.plan_task("Test task")
     end
 
-    it "includes context with memories and pitfalls" do
+    it "includes context with memories and pitfalls"  , :aggregate_failures do
       result = architect.plan_task("Test task")
 
       expect(result["context"]).to have_key("relevant_memories")
@@ -57,7 +57,7 @@ RSpec.describe Agentf::Agents::Specialist do
   subject(:specialist) { described_class.new(memory) }
 
   describe "#execute" do
-    it "executes a subtask" do
+    it "executes a subtask"  , :aggregate_failures do
       subtask = { "id" => 1, "description" => "Implement feature" }
 
       expect(memory).to receive(:store_success)
@@ -99,7 +99,7 @@ RSpec.describe Agentf::Agents::Reviewer do
   subject(:reviewer) { described_class.new(memory) }
 
   describe "#review" do
-    it "reviews subtask result" do
+    it "reviews subtask result"  , :aggregate_failures do
       subtask_result = { "subtask_id" => 1, "success" => true }
 
       result = reviewer.review(subtask_result)
@@ -130,7 +130,7 @@ RSpec.describe Agentf::Agents::Documenter do
       documenter.sync_docs("project")
     end
 
-    it "returns successes and pitfalls" do
+    it "returns successes and pitfalls"  , :aggregate_failures do
       allow(memory).to receive(:get_recent_memories).and_return([
         { "type" => "success" },
         { "type" => "pitfall" }
@@ -151,7 +151,7 @@ RSpec.describe Agentf::Agents::Explorer do
   subject(:explorer_agent) { described_class.new(memory, commands: commands) }
 
   describe "#explore" do
-    it "explores and finds files" do
+    it "explores and finds files"  , :aggregate_failures do
       result = explorer_agent.explore("app/**/*.rb")
 
       expect(result).to have_key("files")
@@ -172,7 +172,7 @@ RSpec.describe Agentf::Agents::Tester do
   subject(:tester_agent) { described_class.new(memory, commands: commands) }
 
   describe "#generate_tests" do
-    it "generates tests for source file" do
+    it "generates tests for source file"  , :aggregate_failures do
       result = tester_agent.generate_tests("app/models/user.rb")
 
       expect(result).to have_key("test_file")
@@ -201,7 +201,7 @@ RSpec.describe Agentf::Agents::Debugger do
   subject(:debugger_agent) { described_class.new(memory, commands: commands) }
 
   describe "#diagnose" do
-    it "diagnoses error and returns analysis" do
+    it "diagnoses error and returns analysis"  , :aggregate_failures do
       result = debugger_agent.diagnose("NoMethodError: undefined method 'foo'")
 
       expect(result).to have_key("error")
@@ -224,7 +224,7 @@ RSpec.describe Agentf::Agents::Designer do
   subject(:designer_agent) { described_class.new(memory, commands: commands) }
 
   describe "#implement_design" do
-    it "implements design from spec" do
+    it "implements design from spec"  , :aggregate_failures do
       result = designer_agent.implement_design("Button component with click handler")
 
       expect(result).to have_key("component")

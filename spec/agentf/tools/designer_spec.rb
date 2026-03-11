@@ -6,7 +6,7 @@ RSpec.describe Agentf::Commands::Designer do
   subject(:designer) { described_class.new(base_path: base_path) }
 
   describe "#generate_component" do
-    it "generates React component by default" do
+    it "generates React component by default"  , :aggregate_failures do
       spec = designer.generate_component("UserCard", "User card with name and email")
 
       expect(spec.name).to eq("UserCard")
@@ -14,14 +14,14 @@ RSpec.describe Agentf::Commands::Designer do
       expect(spec.code).not_to be_empty
     end
 
-    it "generates component with props" do
+    it "generates component with props"  , :aggregate_failures do
       spec = designer.generate_component("LoginForm", "email: string, password: string, onSubmit: function")
 
       expect(spec.code).to include("email")
       expect(spec.code).to include("password")
     end
 
-    it "generates React with CSS" do
+    it "generates React with CSS"  , :aggregate_failures do
       spec = designer.generate_component("Button", "text: string", style_system: "css")
 
       expect(spec.framework).to eq("react")
@@ -29,7 +29,7 @@ RSpec.describe Agentf::Commands::Designer do
       expect(spec.code).to include("import")
     end
 
-    it "generates Vue component" do
+    it "generates Vue component"  , :aggregate_failures do
       spec = designer.generate_component("Modal", "title: string, open: boolean", framework: "vue")
 
       expect(spec.framework).to eq("vue")
@@ -38,7 +38,7 @@ RSpec.describe Agentf::Commands::Designer do
   end
 
   describe "#validate_design_system" do
-    it "returns framework and style system" do
+    it "returns framework and style system"  , :aggregate_failures do
       result = designer.validate_design_system
 
       expect(result).to have_key("framework")
@@ -51,7 +51,7 @@ RSpec.describe Agentf::Commands::Designer do
       expect(result).to have_key("components_found")
     end
 
-    it "includes issues array" do
+    it "includes issues array"  , :aggregate_failures do
       result = designer.validate_design_system
 
       expect(result).to have_key("issues")

@@ -4,34 +4,28 @@ flowchart TD
   ICLI --> INS[Agentf::Installer]
 
   subgraph Source[Class Metadata Source]
-    A[Agent classes
-Agentf::Agents::*]
-    C[Command classes
-Agentf::Commands::*]
-    T[Tool primitives
-Agentf::Tools::*]
+    A[Agent classes\nAgentf::Agents::*]
+    C[Command classes\nAgentf::Commands::*]
+    T[Tool primitives\nAgentf::Tools::*]
   end
 
   INS --> A
   INS --> C
 
-  A --> AMD[Generated Agent Markdown
-.opencode/agents/* OR .github/agents/*]
-  C --> CMD[Generated Command Markdown
-.opencode/commands/* OR .github/commands/*]
+  A --> AMD[Generated Agent Markdown\n.opencode/agents/* OR .github/agents/*]
+  C --> CMD[Generated Command Markdown\n.opencode/commands/* OR .github/commands/*]
 
-  AMD -.includes memory policy.-> MEMMETA[memory_concepts
-reads/writes/policy]
+  AMD -.includes memory policy.-> MEMMETA[memory_concepts\nreads/writes/policy]
   CMD -.lists callable commands.-> CMETA[manifest commands list]
 
   subgraph Runtime[Execution Runtime]
     APP[App / User Task]
     WF[Agentf::WorkflowEngine\nORCHESTRATOR]
-    P[Provider Adapter
-OpenCode / Copilot]
+    P[Provider Adapter\nOpenCode / Copilot]
     AG[Role Agents\nPLANNER/ENGINEER/QA_TESTER/etc]
     COM[Commands]
-    TOOLS[Tools]
+    TOOLS[Tools / Provider Tools]
+    MET[Metrics & Telemetry]
   end
 
   APP --> WF
@@ -39,8 +33,9 @@ OpenCode / Copilot]
   P --> AG
   P --> COM
   COM --> TOOLS
+  WF --> MET
 
-  WF -->|get_relevant_context| REDIS[(RedisMemory)]
+  WF -->|get_relevant_context| REDIS[(RedisMemory\nRedisJSON + RediSearch)]
   WF -->|store_feature_intent| REDIS
   AG -->|store_success/pitfall/lesson| REDIS
   REDIS --> EDGE[(Edge Graph\nedge:*)]
@@ -57,10 +52,15 @@ OpenCode / Copilot]
 
   subgraph MCP[MCP Server]
     MS[agentf mcp-server]
-    MTOOLS[code and memory tools<br/>neighbors and subgraph]
+    MTOOLS[code and memory tools\nneighbors and subgraph]
+    WEB[MCP Web UI (optional)]
   end
 
   MS --> MTOOLS
   MTOOLS --> COM
+  MS --> WEB
 
   REDIS -.optional doc sync by agent behavior.-> AMD
+
+  %% Notes: this diagram shows how metadata produces manifests, how the runtime
+  %% fetches and stores context in Redis, and how MCP and CLI expose tools.

@@ -44,7 +44,7 @@ RSpec.describe Agentf::WorkflowEngine do
       Agentf.config.metrics_enabled = original
     end
 
-    it "runs workflow and captures feature intent" do
+    it "runs workflow and captures feature intent"  , :aggregate_failures do
       engine = described_class.new(memory: memory, base_path: base_path, provider: :opencode)
 
       expect(memory).to receive(:store_feature_intent)
@@ -56,7 +56,7 @@ RSpec.describe Agentf::WorkflowEngine do
       expect(result["completed_agents"]).not_to be_empty
     end
 
-    it "respects provided context" do
+    it "respects provided context"  , :aggregate_failures do
       engine = described_class.new(memory: memory, base_path: base_path, provider: :copilot)
       context = { "design_spec" => "Button component" }
 
@@ -80,7 +80,7 @@ RSpec.describe Agentf::WorkflowEngine do
       engine.execute("Add feature")
     end
 
-    it "records memory confirmation events when persistence requires confirmation" do
+    it "records memory confirmation events when persistence requires confirmation"  , :aggregate_failures do
       confirmation = Agentf::Memory::RedisMemory::ConfirmationRequired.new("confirm", { reason: "ask_first" })
 
       memory_with_confirmation = double(

@@ -60,7 +60,7 @@ RSpec.describe Agentf::CLI::Update do
   end
 
   describe "help" do
-    it "prints help text" do
+    it "prints help text"  , :aggregate_failures do
       output = capture_stdout { cli.run(["help"]) }
 
       expect(output).to include("Usage: agentf update")
@@ -81,7 +81,7 @@ RSpec.describe Agentf::CLI::Update do
   end
 
   describe "when stamp is missing (fresh install)" do
-    it "runs installer and writes stamp" do
+    it "runs installer and writes stamp"  , :aggregate_failures do
       FileUtils.mkdir_p(stamp_dir)
 
       output = capture_stdout do
@@ -108,7 +108,7 @@ RSpec.describe Agentf::CLI::Update do
       File.write(stamp_path, "#{Agentf::VERSION}\n")
     end
 
-    it "skips update and reports up to date" do
+    it "skips update and reports up to date"  , :aggregate_failures do
       output = capture_stdout do
         cli.run([
           "--provider=opencode",
@@ -130,7 +130,7 @@ RSpec.describe Agentf::CLI::Update do
       File.write(stamp_path, "0.1.0\n")
     end
 
-    it "runs installer and updates stamp" do
+    it "runs installer and updates stamp"  , :aggregate_failures do
       output = capture_stdout do
         cli.run([
           "--provider=opencode",
@@ -152,7 +152,7 @@ RSpec.describe Agentf::CLI::Update do
       File.write(stamp_path, "#{Agentf::VERSION}\n")
     end
 
-    it "regenerates even when version matches" do
+    it "regenerates even when version matches"  , :aggregate_failures do
       output = capture_stdout do
         cli.run([
           "--provider=opencode",
@@ -173,7 +173,7 @@ RSpec.describe Agentf::CLI::Update do
     let(:copilot_stamp_dir) { File.join(root, ".github") }
     let(:copilot_stamp_path) { File.join(copilot_stamp_dir, ".agentf-version") }
 
-    it "checks and updates each provider independently" do
+    it "checks and updates each provider independently"  , :aggregate_failures do
       FileUtils.mkdir_p(stamp_dir)
       FileUtils.mkdir_p(copilot_stamp_dir)
 
@@ -199,7 +199,7 @@ RSpec.describe Agentf::CLI::Update do
       expect(File.read(copilot_stamp_path).strip).to eq(Agentf::VERSION)
     end
 
-    it "writes separate stamp files per provider" do
+    it "writes separate stamp files per provider"  , :aggregate_failures do
       output = capture_stdout do
         cli.run([
           "--provider=opencode,copilot",
@@ -223,7 +223,7 @@ RSpec.describe Agentf::CLI::Update do
       FileUtils.remove_entry(local_root) if File.directory?(local_root)
     end
 
-    it "scope=local only checks local root" do
+    it "scope=local only checks local root"  , :aggregate_failures do
       output = capture_stdout do
         cli.run([
           "--provider=opencode",
@@ -240,7 +240,7 @@ RSpec.describe Agentf::CLI::Update do
       expect(File).not_to exist(global_stamp)
     end
 
-    it "scope=global only checks global root" do
+    it "scope=global only checks global root"  , :aggregate_failures do
       output = capture_stdout do
         cli.run([
           "--provider=opencode",
@@ -257,7 +257,7 @@ RSpec.describe Agentf::CLI::Update do
       expect(File).to exist(global_stamp)
     end
 
-    it "scope=all checks both roots" do
+    it "scope=all checks both roots"  , :aggregate_failures do
       output = capture_stdout do
         cli.run([
           "--provider=opencode",

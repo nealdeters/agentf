@@ -64,14 +64,14 @@ RSpec.describe Agentf::Commands::Debugger do
   end
 
   describe "#analyze_logs" do
-    it "handles missing log file" do
+    it "handles missing log file"  , :aggregate_failures do
       result = debugger.analyze_logs
       expect(result).to have_key("errors")
       expect(result).to have_key("warnings")
       expect(result["summary"]).to include("No log file found")
     end
 
-    it "accepts custom log file path" do
+    it "accepts custom log file path"  , :aggregate_failures do
       result = debugger.analyze_logs(log_file: "custom.log")
       expect(result).to have_key("errors")
       expect(result).to have_key("warnings")
@@ -84,7 +84,7 @@ RSpec.describe Agentf::Commands::Debugger do
   end
 
   describe "#suggest_fix" do
-    it "generates fix suggestions based on error" do
+    it "generates fix suggestions based on error"  , :aggregate_failures do
       analysis = debugger.parse_error("NoMethodError: undefined method 'foo'")
       suggestions = debugger.suggest_fix(analysis)
 
@@ -112,7 +112,7 @@ RSpec.describe Agentf::Commands::Debugger do
   end
 
   describe "#cluster_errors" do
-    it "groups errors by type" do
+    it "groups errors by type"  , :aggregate_failures do
       errors = [
         "NoMethodError: undefined method 'a'",
         "NoMethodError: undefined method 'b'",

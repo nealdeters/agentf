@@ -10,7 +10,7 @@ RSpec.describe Agentf::Agents::Explorer do
     allow(agent).to receive(:log)
   end
 
-  it "returns files and context when exploring" do
+  it "returns files and context when exploring"  , :aggregate_failures do
     allow(commands).to receive(:glob).with("src/**/*.rb", file_types: nil).and_return(["lib/a.rb", "lib/b.rb"])
     allow(memory).to receive(:store_episode)
 
@@ -20,7 +20,7 @@ RSpec.describe Agentf::Agents::Explorer do
     expect(result["context_gathered"]).to be true
   end
 
-  it "returns confirmation_required when memory requires confirmation" do
+  it "returns confirmation_required when memory requires confirmation"  , :aggregate_failures do
     allow(commands).to receive(:glob).and_return(["lib/a.rb"])
     confirmation = Agentf::Memory::RedisMemory::ConfirmationRequired.new("confirm", { reason: "ask_first" })
     allow(memory).to receive(:store_episode).and_raise(confirmation)

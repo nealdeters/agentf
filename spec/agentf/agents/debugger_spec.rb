@@ -17,7 +17,7 @@ RSpec.describe Agentf::Agents::Debugger do
     allow(memory).to receive(:store_episode).and_return("episode_debug")
   end
 
-  it "returns success=true with analysis payload" do
+  it "returns success=true with analysis payload"  , :aggregate_failures do
     result = agent.diagnose("NoMethodError: undefined method foo for nil")
 
     expect(result["success"]).to be(true)
@@ -25,7 +25,7 @@ RSpec.describe Agentf::Agents::Debugger do
     expect(result.dig("analysis", "error_type")).to eq("NoMethodError")
   end
 
-  it "returns confirmation_required when memory requires confirmation" do
+  it "returns confirmation_required when memory requires confirmation"  , :aggregate_failures do
     confirmation = Agentf::Memory::RedisMemory::ConfirmationRequired.new("confirm", { reason: "ask_first" })
     allow(memory).to receive(:store_episode).and_raise(confirmation)
 

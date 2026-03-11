@@ -36,12 +36,12 @@ RSpec.describe Agentf::Config do
       expect(config.metrics_enabled).to be true
     end
 
-    it "enables workflow contract by default" do
+    it "enables workflow contract by default"  , :aggregate_failures do
       expect(config.workflow_contract_enabled).to be true
       expect(config.workflow_contract_mode).to eq("advisory")
     end
 
-    it "enables agent contract by default in enforcing mode" do
+    it "enables agent contract by default in enforcing mode"  , :aggregate_failures do
       expect(config.agent_contract_enabled).to be true
       expect(config.agent_contract_mode).to eq("enforcing")
     end
@@ -54,7 +54,7 @@ RSpec.describe Agentf::Config do
       expect(flagged_config.metrics_enabled).to be false
     end
 
-    it "supports contract env flags" do
+    it "supports contract env flags"  , :aggregate_failures do
       ENV["AGENTF_WORKFLOW_CONTRACT_ENABLED"] = "false"
       ENV["AGENTF_WORKFLOW_CONTRACT_MODE"] = "enforcing"
       ENV["AGENTF_AGENT_CONTRACT_ENABLED"] = "false"
@@ -88,7 +88,7 @@ RSpec.describe Agentf::Config do
       expect(config.metrics_enabled).to be false
     end
 
-    it "allows setting workflow contract fields" do
+    it "allows setting workflow contract fields"  , :aggregate_failures do
       config.workflow_contract_enabled = false
       config.workflow_contract_mode = "off"
       config.agent_contract_enabled = false

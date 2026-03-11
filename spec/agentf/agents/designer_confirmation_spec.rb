@@ -14,7 +14,7 @@ RSpec.describe Agentf::Agents::Designer do
     allow(commands).to receive(:generate_component).and_return(spec)
   end
 
-  it "returns confirmation_required when memory requires confirmation" do
+  it "returns confirmation_required when memory requires confirmation"  , :aggregate_failures do
     confirmation = Agentf::Memory::RedisMemory::ConfirmationRequired.new("confirm", { reason: "ask_first" })
     allow(memory).to receive(:store_success).and_raise(confirmation)
 

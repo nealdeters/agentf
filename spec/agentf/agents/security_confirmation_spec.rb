@@ -7,7 +7,7 @@ RSpec.describe Agentf::Agents::Security do
 
   before { allow(agent).to receive(:log) }
 
-  it "returns confirmation_required when storing success is blocked" do
+  it "returns confirmation_required when storing success is blocked"  , :aggregate_failures do
     allow(commands).to receive(:scan).and_return({ "issues" => [] })
     confirmation = Agentf::Memory::RedisMemory::ConfirmationRequired.new("confirm", { reason: "ask_first" })
     allow(memory).to receive(:store_success).and_raise(confirmation)
@@ -17,7 +17,7 @@ RSpec.describe Agentf::Agents::Security do
     expect(res["confirmation_details"]).to eq(confirmation.details)
   end
 
-  it "returns confirmation_required when storing pitfall is blocked" do
+  it "returns confirmation_required when storing pitfall is blocked"  , :aggregate_failures do
     allow(commands).to receive(:scan).and_return({ "issues" => [{ "issue" => "secret" }] })
     confirmation = Agentf::Memory::RedisMemory::ConfirmationRequired.new("confirm", { reason: "ask_first" })
     allow(memory).to receive(:store_pitfall).and_raise(confirmation)

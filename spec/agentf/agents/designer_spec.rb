@@ -15,7 +15,7 @@ RSpec.describe Agentf::Agents::Designer do
     )
   end
 
-  it "returns success=true when design is implemented" do
+  it "returns success=true when design is implemented"  , :aggregate_failures do
     result = agent.implement_design("Build a button")
 
     expect(result["component"]).to eq("GeneratedComponent")
