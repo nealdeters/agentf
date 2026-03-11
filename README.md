@@ -80,6 +80,9 @@ agentf <command> help
 - `AGENTF_AGENT_CONTRACT_MODE` per-agent mode: `advisory|enforcing|off` (default: `enforcing`)
 - `AGENTF_GEM_PATH` optional gem root hint for OpenCode plugin binary resolution
 
+- Note: `AGENTF_DEFAULT_PACK` is no longer used. Profiles are now embedded in the orchestrator
+  and selected via workflow context or the orchestrator's inference logic.
+
 If Redis requires auth, include credentials in `REDIS_URL` (example: `redis://:password@localhost:6379`).
 
 ## Docs
