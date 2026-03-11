@@ -45,8 +45,8 @@ module Agentf
 
       def self.policy_boundaries
         {
-          "always" => ["Return issue list and best practices", "Persist outcome as success or pitfall"],
-          "ask_first" => ["Allowing known secret patterns in context"],
+          "always" => ["Return issue list and best practices"],
+          "ask_first" => ["Allowing known secret patterns in context", "Persisting security scan findings to memory"],
           "never" => ["Echo raw secrets in output"],
           "required_inputs" => ["task"],
           "required_outputs" => ["issues", "best_practices"]

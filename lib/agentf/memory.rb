@@ -45,7 +45,39 @@ module Agentf
       end
 
       def store_episode(type:, title:, description:, context: "", code_snippet: "", tags: [], agent: Agentf::AgentRoles::ENGINEER,
-                        related_task_id: nil, metadata: {}, entity_ids: [], relationships: [], parent_episode_id: nil, causal_from: nil)
+                        related_task_id: nil, metadata: {}, entity_ids: [], relationships: [], parent_episode_id: nil, causal_from: nil, confirm: nil)
+        # Determine persistence preference from the agent's policy boundaries.
+        # Precedence: never > always > ask_first > none.
+        auto_confirm = ENV['AGENTF_AUTO_CONFIRM_MEMORIES'] == 'true'
+        pref = persistence_preference_for(agent)
+
+        case pref
+        when :never
+          begin
+            puts "[MEMORY] Skipping persistence for #{agent}: policy forbids persisting memories"
+          rescue StandardError
+          end
+          return nil
+        when :always
+          # proceed without requiring explicit confirm
+        when :ask_first
+          unless agent == Agentf::AgentRoles::ORCHESTRATOR || confirm == true || auto_confirm
+            begin
+              puts "[MEMORY] Skipping persistence for #{agent}: confirmation required by policy"
+            rescue StandardError
+            end
+            return nil
+          end
+        else
+          # default conservative behavior: require explicit confirm (or env opt-in)
+          unless agent == Agentf::AgentRoles::ORCHESTRATOR || confirm == true || auto_confirm
+            begin
+              puts "[MEMORY] Skipping persistence for #{agent}: confirmation required"
+            rescue StandardError
+            end
+            return nil
+          end
+        end
         episode_id = "episode_#{SecureRandom.hex(4)}"
         normalized_metadata = enrich_metadata(
           metadata: metadata,
@@ -107,52 +139,56 @@ module Agentf
         episode_id
       end
 
-      def store_success(title:, description:, context: "", code_snippet: "", tags: [], agent: Agentf::AgentRoles::ENGINEER)
-        store_episode(
+      def store_success(title:, description:, context: "", code_snippet: "", tags: [], agent: Agentf::AgentRoles::ENGINEER, confirm: nil)
+         store_episode(
           type: "success",
           title: title,
           description: description,
           context: context,
           code_snippet: code_snippet,
           tags: tags,
-          agent: agent
+           agent: agent,
+           confirm: confirm
         )
       end
 
-      def store_pitfall(title:, description:, context: "", code_snippet: "", tags: [], agent: Agentf::AgentRoles::ENGINEER)
-        store_episode(
+      def store_pitfall(title:, description:, context: "", code_snippet: "", tags: [], agent: Agentf::AgentRoles::ENGINEER, confirm: nil)
+         store_episode(
           type: "pitfall",
           title: title,
           description: description,
           context: context,
           code_snippet: code_snippet,
           tags: tags,
-          agent: agent
+           agent: agent,
+           confirm: confirm
         )
       end
 
-      def store_lesson(title:, description:, context: "", code_snippet: "", tags: [], agent: Agentf::AgentRoles::ENGINEER)
-        store_episode(
+      def store_lesson(title:, description:, context: "", code_snippet: "", tags: [], agent: Agentf::AgentRoles::ENGINEER, confirm: nil)
+         store_episode(
           type: "lesson",
           title: title,
           description: description,
           context: context,
           code_snippet: code_snippet,
           tags: tags,
-          agent: agent
+           agent: agent,
+           confirm: confirm
         )
       end
 
-      def store_business_intent(title:, description:, constraints: [], tags: [], agent: Agentf::AgentRoles::ORCHESTRATOR, priority: 1)
+      def store_business_intent(title:, description:, constraints: [], tags: [], agent: Agentf::AgentRoles::ORCHESTRATOR, priority: 1, confirm: nil)
         context = constraints.any? ? "Constraints: #{constraints.join('; ')}" : ""
 
-        store_episode(
+         store_episode(
           type: "business_intent",
           title: title,
           description: description,
           context: context,
           tags: tags,
-          agent: agent,
+           agent: agent,
+           confirm: confirm,
           metadata: {
             "intent_kind" => "business",
             "constraints" => constraints,
@@ -162,18 +198,19 @@ module Agentf
       end
 
       def store_feature_intent(title:, description:, acceptance_criteria: [], non_goals: [], tags: [], agent: Agentf::AgentRoles::PLANNER,
-                               related_task_id: nil)
+                                related_task_id: nil, confirm: nil)
         context_parts = []
         context_parts << "Acceptance: #{acceptance_criteria.join('; ')}" if acceptance_criteria.any?
         context_parts << "Non-goals: #{non_goals.join('; ')}" if non_goals.any?
 
-        store_episode(
+         store_episode(
           type: "feature_intent",
           title: title,
           description: description,
           context: context_parts.join(" | "),
           tags: tags,
           agent: agent,
+           confirm: confirm,
           related_task_id: related_task_id,
           metadata: {
             "intent_kind" => "feature",
@@ -856,6 +893,54 @@ module Agentf
         base["parent_episode_id"] = parent_episode_id.to_s unless parent_episode_id.to_s.empty?
         base["causal_from"] = causal_from.to_s unless causal_from.to_s.empty?
         base
+      end
+
+      # Determine whether writes from the given agent should require explicit
+      # confirmation. We consider agents that declare "ask_first" policy
+      # boundaries to be conservative and require confirmation before persisting
+      # memories. Agent classes register policy boundaries on their class
+      # definitions (see agents/*). When agent is provided as a role string
+      # (eg. "ENGINEER") we try to match against known agent classes.
+      def agent_requires_confirmation?(agent)
+        begin
+          # If a developer passed an agent class-like string, try to map it to
+          # the loaded agent class and inspect its policy_boundaries.
+          candidate = Agentf::Agents.constants
+                      .map { |c| Agentf::Agents.const_get(c) }
+                      .find do |klass|
+                        klass.is_a?(Class) && klass.respond_to?(:policy_boundaries) && klass.typed_name == agent
+                      end
+
+          return false unless candidate
+
+          boundaries = candidate.policy_boundaries
+          ask_first = Array(boundaries["ask_first"]) rescue []
+          !ask_first.empty?
+        rescue StandardError
+          false
+        end
+      end
+
+      # Inspect loaded agent classes for explicit persistence preference.
+      # Returns one of: :always, :ask_first, :never, or nil when unknown.
+      def persistence_preference_for(agent)
+        begin
+          candidate = Agentf::Agents.constants
+                      .map { |c| Agentf::Agents.const_get(c) }
+                      .find do |klass|
+                        klass.is_a?(Class) && klass.respond_to?(:policy_boundaries) && klass.typed_name == agent
+                      end
+
+          return nil unless candidate
+
+          boundaries = candidate.policy_boundaries
+          return :never if Array(boundaries["never"]).any?
+          return :always if Array(boundaries["always"]).any? && Array(boundaries["ask_first"]).empty?
+          return :ask_first if Array(boundaries["ask_first"]).any?
+          nil
+        rescue StandardError
+          nil
+        end
       end
 
       def infer_division(agent)

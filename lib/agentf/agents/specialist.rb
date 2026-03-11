@@ -45,7 +45,7 @@ module Agentf
       def self.policy_boundaries
         {
           "always" => ["Persist execution outcome", "Return deterministic success boolean"],
-          "ask_first" => ["Applying architecture style changes across unrelated modules"],
+          "ask_first" => ["Applying architecture style changes across unrelated modules", "Persisting execution outcomes to memory (success/pitfall)"] ,
           "never" => ["Claim implementation complete without execution result"],
           "required_inputs" => ["description"],
           "required_outputs" => ["subtask_id", "success"]

@@ -45,8 +45,8 @@ module Agentf
 
       def self.policy_boundaries
         {
-          "always" => ["Return concrete file evidence", "Persist exploration breadcrumbs"],
-          "ask_first" => ["Scanning outside configured base path"],
+          "always" => ["Return concrete file evidence"],
+          "ask_first" => ["Scanning outside configured base path", "Persisting exploration breadcrumbs to memory"],
           "never" => ["Mutate project files during exploration"],
           "required_inputs" => [],
           "required_outputs" => ["files", "context_gathered"]
