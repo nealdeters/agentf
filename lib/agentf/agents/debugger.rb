@@ -45,8 +45,8 @@ module Agentf
 
       def self.policy_boundaries
         {
-          "always" => ["Return analysis with root causes and suggested fix", "Persist debugging lesson"],
-          "ask_first" => ["Applying speculative fixes without reproducible error"],
+          "always" => ["Return analysis with root causes and suggested fix"],
+          "ask_first" => ["Applying speculative fixes without reproducible error", "Persisting debugging lessons to memory"],
           "never" => ["Discard stack trace context when available"],
           "required_inputs" => ["error_text"],
           "required_outputs" => ["analysis", "success"]

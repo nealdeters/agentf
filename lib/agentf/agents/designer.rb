@@ -46,7 +46,7 @@ module Agentf
       def self.policy_boundaries
         {
           "always" => ["Return generated component details", "Persist successful implementation pattern"],
-          "ask_first" => ["Changing primary UI framework"],
+          "ask_first" => ["Changing primary UI framework", "Persisting successful implementation patterns to memory"],
           "never" => ["Return empty generated code for successful design task"],
           "required_inputs" => ["design_spec"],
           "required_outputs" => ["component", "generated_code", "success"]
