@@ -30,7 +30,7 @@ RSpec.describe Agentf::Commands::Tester do
   end
 
   describe "#generate_unit_tests" do
-    it "generates test code for existing file" do
+    it "generates test code for existing file"  , :aggregate_failures do
       template = tester.generate_unit_tests("app/models/user.rb")
       expect(template.test_code).not_to be_empty
       expect(template.framework).to eq("rspec")
@@ -51,7 +51,7 @@ RSpec.describe Agentf::Commands::Tester do
       expect(template.test_file).to eq("app/components/User.test.js")
     end
 
-    it "returns error message for nonexistent file" do
+    it "returns error message for nonexistent file"  , :aggregate_failures do
       template = tester.generate_unit_tests("nonexistent/file.rb")
       expect(template.test_file).to eq("")
       expect(template.test_code).to include("not found")
@@ -59,7 +59,7 @@ RSpec.describe Agentf::Commands::Tester do
   end
 
   describe "#run_tests" do
-    it "handles test execution gracefully" do
+    it "handles test execution gracefully"  , :aggregate_failures do
       # Should return passed: false for invalid test paths
       result = tester.run_tests(test_path: "nonexistent/spec.rb")
       expect(result).to have_key("passed")

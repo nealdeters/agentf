@@ -145,18 +145,30 @@ module Agentf
         constraints = parse_list_option(args, "--constraints=")
         priority = parse_integer_option(args, "--priority=", default: 1)
 
-        intent_id = @memory.store_business_intent(
-          title: title,
-          description: description,
-          tags: tags,
-          constraints: constraints,
-          priority: priority
-        )
+        id = nil
+        res = safe_cli_memory_write(@memory, attempted: { command: "add-business-intent", args: { title: title, description: description, tags: tags, constraints: constraints, priority: priority } }) do
+          id = @memory.store_business_intent(
+            title: title,
+            description: description,
+            tags: tags,
+            constraints: constraints,
+            priority: priority
+          )
+        end
+
+        if res.is_a?(Hash) && res["confirmation_required"]
+          if @json_output
+            puts JSON.generate(res)
+          else
+            $stderr.puts "Confirmation required to store business intent: #{res['confirmation_details'].inspect}"
+          end
+          return
+        end
 
         if @json_output
-          puts JSON.generate({ "id" => intent_id, "type" => "business_intent", "status" => "stored" })
+          puts JSON.generate({ "id" => id, "type" => "business_intent", "status" => "stored" })
         else
-          puts "Stored business intent: #{intent_id}"
+          puts "Stored business intent: #{id}"
         end
       end
 
@@ -174,19 +186,31 @@ module Agentf
         non_goals = parse_list_option(args, "--non-goals=")
         related_task_id = parse_single_option(args, "--task=")
 
-        intent_id = @memory.store_feature_intent(
-          title: title,
-          description: description,
-          tags: tags,
-          acceptance_criteria: acceptance_criteria,
-          non_goals: non_goals,
-          related_task_id: related_task_id
-        )
+        id = nil
+        res = safe_cli_memory_write(@memory, attempted: { command: "add-feature-intent", args: { title: title, description: description, tags: tags, acceptance: acceptance_criteria, non_goals: non_goals, related_task_id: related_task_id } }) do
+          id = @memory.store_feature_intent(
+            title: title,
+            description: description,
+            tags: tags,
+            acceptance_criteria: acceptance_criteria,
+            non_goals: non_goals,
+            related_task_id: related_task_id
+          )
+        end
+
+        if res.is_a?(Hash) && res["confirmation_required"]
+          if @json_output
+            puts JSON.generate(res)
+          else
+            $stderr.puts "Confirmation required to store feature intent: #{res['confirmation_details'].inspect}"
+          end
+          return
+        end
 
         if @json_output
-          puts JSON.generate({ "id" => intent_id, "type" => "feature_intent", "status" => "stored" })
+          puts JSON.generate({ "id" => id, "type" => "feature_intent", "status" => "stored" })
         else
-          puts "Stored feature intent: #{intent_id}"
+          puts "Stored feature intent: #{id}"
         end
       end
 
@@ -204,20 +228,42 @@ module Agentf
         agent = parse_single_option(args, "--agent=") || Agentf::AgentRoles::ENGINEER
         code_snippet = parse_single_option(args, "--code=").to_s
 
-        intent_id = @memory.store_episode(
-          type: type,
-          title: title,
-          description: description,
-          context: context,
-          tags: tags,
-          agent: agent,
-          code_snippet: code_snippet
-        )
+        id = nil
+        res = safe_cli_memory_write(@memory, attempted: { command: "add-#{type}", args: { title: title, description: description, tags: tags, context: context, agent: agent, code: code_snippet } }) do
+          id = @memory.store_episode(
+            type: type,
+            title: title,
+            description: description,
+            context: context,
+            tags: tags,
+            agent: agent,
+            code_snippet: code_snippet
+          )
+        end
+
+        if res.is_a?(Hash) && res["confirmation_required"]
+          if @json_output
+            puts JSON.generate(res)
+          else
+            $stderr.puts "Confirmation required to store #{type}: #{res['confirmation_details'].inspect}"
+          end
+          return
+        end
 
         if @json_output
-          puts JSON.generate({ "id" => intent_id, "type" => type, "status" => "stored" })
+          puts JSON.generate({ "id" => id, "type" => type, "status" => "stored" })
         else
-          puts "Stored #{type}: #{intent_id}"
+          puts "Stored #{type}: #{id}"
+        end
+      end
+
+      # Helper to standardize CLI memory write confirmation handling.
+      def safe_cli_memory_write(memory, attempted: {})
+        begin
+          yield
+          nil
+        rescue Agentf::Memory::RedisMemory::ConfirmationRequired => e
+          { "confirmation_required" => true, "confirmation_details" => e.details, "attempted" => attempted }
         end
       end
 

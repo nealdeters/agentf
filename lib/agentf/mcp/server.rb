@@ -66,6 +66,19 @@ module Agentf
         @server = build_server
       end
 
+      # Helper to centralize confirmation handling for MCP server write tools.
+      # Yields the block that performs the memory write and returns either the
+      # block result or the normalized confirmation hash produced by
+      # Agentf::Agents::Base#safe_memory_write.
+      def safe_mcp_memory_write(memory, attempted: {})
+        begin
+          yield
+          nil
+        rescue Agentf::Memory::RedisMemory::ConfirmationRequired => e
+          { "confirmation_required" => true, "confirmation_details" => e.details, "attempted" => attempted }
+        end
+      end
+
       # Start the stdio read loop (blocks until stdin closes).
       def run
         @server.run
@@ -349,14 +362,24 @@ module Agentf
           argument :priority, Integer, required: false, description: "Priority"
           call do |args|
             mcp_server.send(:guard!, "agentf-memory-add-business-intent", **args)
-            id = memory.store_business_intent(
-              title: args[:title],
-              description: args[:description],
-              tags: args[:tags] || [],
-              constraints: args[:constraints] || [],
-              priority: args[:priority] || 1
-            )
-            JSON.generate(id: id, type: "business_intent", status: "stored")
+              begin
+                id = nil
+                res = mcp_server.send(:safe_mcp_memory_write, memory, attempted: { tool: "agentf-memory-add-business-intent", args: args }) do
+                  id = memory.store_business_intent(
+                    title: args[:title],
+                    description: args[:description],
+                    tags: args[:tags] || [],
+                    constraints: args[:constraints] || [],
+                    priority: args[:priority] || 1
+                  )
+                end
+
+                if res.is_a?(Hash) && res["confirmation_required"]
+                  JSON.generate(confirmation_required: true, confirmation_details: res["confirmation_details"], attempted: res["attempted"])
+                else
+                  JSON.generate(id: id, type: "business_intent", status: "stored")
+                end
+              end
           end
         end
 
@@ -370,15 +393,25 @@ module Agentf
           argument :related_task_id, String, required: false, description: "Related task id"
           call do |args|
             mcp_server.send(:guard!, "agentf-memory-add-feature-intent", **args)
-            id = memory.store_feature_intent(
-              title: args[:title],
-              description: args[:description],
-              tags: args[:tags] || [],
-              acceptance_criteria: args[:acceptance] || [],
-              non_goals: args[:non_goals] || [],
-              related_task_id: args[:related_task_id]
-            )
-            JSON.generate(id: id, type: "feature_intent", status: "stored")
+              begin
+                id = nil
+                res = mcp_server.send(:safe_mcp_memory_write, memory, attempted: { tool: "agentf-memory-add-feature-intent", args: args }) do
+                  id = memory.store_feature_intent(
+                    title: args[:title],
+                    description: args[:description],
+                    tags: args[:tags] || [],
+                    acceptance_criteria: args[:acceptance] || [],
+                    non_goals: args[:non_goals] || [],
+                    related_task_id: args[:related_task_id]
+                  )
+                end
+
+                if res.is_a?(Hash) && res["confirmation_required"]
+                  JSON.generate(confirmation_required: true, confirmation_details: res["confirmation_details"], attempted: res["attempted"])
+                else
+                  JSON.generate(id: id, type: "feature_intent", status: "stored")
+                end
+              end
           end
         end
 
@@ -427,16 +460,26 @@ module Agentf
           argument :context, String, required: false, description: "Context"
           call do |args|
             mcp_server.send(:guard!, "agentf-memory-add-lesson", **args)
-            id = memory.store_episode(
-              type: "lesson",
-              title: args[:title],
-              description: args[:description],
-              agent: args[:agent] || Agentf::AgentRoles::ENGINEER,
-              tags: args[:tags] || [],
-              context: args[:context].to_s,
-              code_snippet: ""
-            )
-            JSON.generate(id: id, type: "lesson", status: "stored")
+              begin
+                id = nil
+                res = mcp_server.send(:safe_mcp_memory_write, memory, attempted: { tool: "agentf-memory-add-lesson", args: args }) do
+                  id = memory.store_episode(
+                    type: "lesson",
+                    title: args[:title],
+                    description: args[:description],
+                    agent: args[:agent] || Agentf::AgentRoles::ENGINEER,
+                    tags: args[:tags] || [],
+                    context: args[:context].to_s,
+                    code_snippet: ""
+                  )
+                end
+
+                if res.is_a?(Hash) && res["confirmation_required"]
+                  JSON.generate(confirmation_required: true, confirmation_details: res["confirmation_details"], attempted: res["attempted"])
+                else
+                  JSON.generate(id: id, type: "lesson", status: "stored")
+                end
+              end
           end
         end
 
@@ -449,16 +492,26 @@ module Agentf
           argument :context, String, required: false, description: "Context"
           call do |args|
             mcp_server.send(:guard!, "agentf-memory-add-success", **args)
-            id = memory.store_episode(
-              type: "success",
-              title: args[:title],
-              description: args[:description],
-              agent: args[:agent] || Agentf::AgentRoles::ENGINEER,
-              tags: args[:tags] || [],
-              context: args[:context].to_s,
-              code_snippet: ""
-            )
-            JSON.generate(id: id, type: "success", status: "stored")
+              begin
+                id = nil
+                res = mcp_server.send(:safe_mcp_memory_write, memory, attempted: { tool: "agentf-memory-add-success", args: args }) do
+                  id = memory.store_episode(
+                    type: "success",
+                    title: args[:title],
+                    description: args[:description],
+                    agent: args[:agent] || Agentf::AgentRoles::ENGINEER,
+                    tags: args[:tags] || [],
+                    context: args[:context].to_s,
+                    code_snippet: ""
+                  )
+                end
+
+                if res.is_a?(Hash) && res["confirmation_required"]
+                  JSON.generate(confirmation_required: true, confirmation_details: res["confirmation_details"], attempted: res["attempted"])
+                else
+                  JSON.generate(id: id, type: "success", status: "stored")
+                end
+              end
           end
         end
 
@@ -471,16 +524,26 @@ module Agentf
           argument :context, String, required: false, description: "Context"
           call do |args|
             mcp_server.send(:guard!, "agentf-memory-add-pitfall", **args)
-            id = memory.store_episode(
-              type: "pitfall",
-              title: args[:title],
-              description: args[:description],
-              agent: args[:agent] || Agentf::AgentRoles::ENGINEER,
-              tags: args[:tags] || [],
-              context: args[:context].to_s,
-              code_snippet: ""
-            )
-            JSON.generate(id: id, type: "pitfall", status: "stored")
+              begin
+                id = nil
+                res = mcp_server.send(:safe_mcp_memory_write, memory, attempted: { tool: "agentf-memory-add-pitfall", args: args }) do
+                  id = memory.store_episode(
+                    type: "pitfall",
+                    title: args[:title],
+                    description: args[:description],
+                    agent: args[:agent] || Agentf::AgentRoles::ENGINEER,
+                    tags: args[:tags] || [],
+                    context: args[:context].to_s,
+                    code_snippet: ""
+                  )
+                end
+
+                if res.is_a?(Hash) && res["confirmation_required"]
+                  JSON.generate(confirmation_required: true, confirmation_details: res["confirmation_details"], attempted: res["attempted"])
+                else
+                  JSON.generate(id: id, type: "pitfall", status: "stored")
+                end
+              end
           end
         end
       end

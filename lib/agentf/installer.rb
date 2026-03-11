@@ -175,6 +175,7 @@ module Agentf
         File.join(root, ".opencode/plugins/agentf-plugin.ts"),
         render_opencode_plugin
       )
+      # Backwards-compatible helper: expose individual tool wrappers
       writes << write_manifest(
         File.join(root, ".opencode/tsconfig.json"),
         render_opencode_tsconfig

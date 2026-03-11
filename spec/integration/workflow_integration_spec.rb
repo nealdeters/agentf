@@ -93,7 +93,7 @@ RSpec.describe "Agent workflow integration" do
   end
 
   describe "feature workflow" do
-    it "runs the full agent chain and stores successes" do
+    it "runs the full agent chain and stores successes"  , :aggregate_failures do
       context = {
         "design_spec" => "Primary button with loading state",
         "source_file" => "app/models/user.rb",
@@ -136,7 +136,7 @@ RSpec.describe "Agent workflow integration" do
   end
 
   describe "bugfix workflow" do
-    it "records a debugging lesson and reviewer approval" do
+    it "records a debugging lesson and reviewer approval"  , :aggregate_failures do
       context = {
         "error" => "NoMethodError: undefined method `process' for nil:NilClass",
         "error_context" => "processing payment",

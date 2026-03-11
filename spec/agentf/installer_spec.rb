@@ -14,7 +14,7 @@ RSpec.describe Agentf::Installer do
   end
 
   describe "#install" do
-    it "installs selected manifests to provider-specific local paths" do
+    it "installs selected manifests to provider-specific local paths"  , :aggregate_failures do
       installer = described_class.new(global_root: global_root, local_root: local_root)
 
       results = installer.install(
@@ -38,7 +38,7 @@ RSpec.describe Agentf::Installer do
       expect(File.read(agent_path)).to include("get_recent_memories")
     end
 
-    it "supports copilot file naming conventions" do
+    it "supports copilot file naming conventions"  , :aggregate_failures do
       installer = described_class.new(global_root: global_root, local_root: local_root)
 
       installer.install(
@@ -58,7 +58,7 @@ RSpec.describe Agentf::Installer do
       expect(File.read(command_manifest)).to include("## Copilot MCP Usage")
     end
 
-    it "bootstraps opencode helper directories and files" do
+    it "bootstraps opencode helper directories and files"  , :aggregate_failures do
       installer = described_class.new(global_root: global_root, local_root: local_root)
 
       installer.install(
@@ -94,7 +94,7 @@ RSpec.describe Agentf::Installer do
       expect(File.read(opencode_json)).to include("agentf-plugin")
     end
 
-    it "merges opencode.json plugin entries instead of overwriting" do
+    it "merges opencode.json plugin entries instead of overwriting"  , :aggregate_failures do
       # create an existing opencode.json with a different plugin
       existing = {
         "$schema" => "https://opencode.ai/config.json",
@@ -119,7 +119,7 @@ RSpec.describe Agentf::Installer do
       expect(results).to satisfy { |arr| arr.any? { |r| r["status"] == "skipped" || r["status"] == "no_manager_found" || r["status"] == "installed" } }
     end
 
-    it "supports dry-run mode without writing files" do
+    it "supports dry-run mode without writing files"  , :aggregate_failures do
       installer = described_class.new(global_root: global_root, local_root: local_root, dry_run: true)
 
       results = installer.install(
@@ -145,7 +145,7 @@ RSpec.describe Agentf::Installer do
       end.to raise_error(ArgumentError, /Unknown provider/)
     end
 
-    it "maps all READ_ACTIONS to CLI commands in agent manifests" do
+    it "maps all READ_ACTIONS to CLI commands in agent manifests"  , :aggregate_failures do
       installer = described_class.new(global_root: global_root, local_root: local_root)
 
       installer.install(
@@ -163,7 +163,7 @@ RSpec.describe Agentf::Installer do
       expect(content).to include("agentf-memory-recent")
     end
 
-    it "includes read fallback for agents with no explicit reads" do
+    it "includes read fallback for agents with no explicit reads"  , :aggregate_failures do
       installer = described_class.new(global_root: global_root, local_root: local_root)
 
       installer.install(

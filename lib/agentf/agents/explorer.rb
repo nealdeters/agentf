@@ -63,14 +63,21 @@ module Agentf
 
         files = @commands.glob(query, file_types: nil)
 
-        memory.store_episode(
-          type: "exploration",
-          title: "Explored: #{query}",
-          description: "Found #{files.size} relevant files",
-          context: "Search pattern: #{file_pattern || 'all files'}",
-          tags: ["exploration", "context"],
-          agent: name
-        )
+        res = safe_memory_write(attempted: { action: "store_exploration", title: "Explored: #{query}", tags: ["exploration", "context"], agent: name }) do
+          memory.store_episode(
+            type: "exploration",
+            title: "Explored: #{query}",
+            description: "Found #{files.size} relevant files",
+            context: "Search pattern: #{file_pattern || 'all files'}",
+            tags: ["exploration", "context"],
+            agent: name
+          )
+        end
+
+        if res.is_a?(Hash) && res["confirmation_required"]
+          log "Memory confirmation required during exploration: #{res['confirmation_details'].inspect}"
+          return { "files" => files, "context_gathered" => true, "confirmation_required" => true, "confirmation_details" => res["confirmation_details"], "attempted" => res["attempted"] }
+        end
 
         log "Found #{files.size} files"
 

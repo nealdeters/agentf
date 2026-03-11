@@ -28,20 +28,22 @@ module Agentf
 
       def record_workflow(workflow_state)
         metrics = extract_metrics(workflow_state)
-
-        @memory.store_episode(
-          type: "success",
-          title: metric_title(metrics),
-          description: metric_description(metrics),
-          context: metric_context(metrics),
-          tags: metric_tags(metrics),
-          agent: Agentf::AgentRoles::ORCHESTRATOR,
-          code_snippet: ""
-        )
-
-        { "status" => "recorded", "metrics" => metrics }
-      rescue StandardError => e
-        { "status" => "error", "error" => e.message }
+        begin
+          @memory.store_episode(
+            type: "success",
+            title: metric_title(metrics),
+            description: metric_description(metrics),
+            context: metric_context(metrics),
+            tags: metric_tags(metrics),
+            agent: Agentf::AgentRoles::ORCHESTRATOR,
+            code_snippet: ""
+          )
+          { "status" => "recorded", "metrics" => metrics }
+        rescue Agentf::Memory::RedisMemory::ConfirmationRequired => e
+          { "status" => "confirmation_required", "confirmation_details" => e.details, "attempted" => { "action" => "record_workflow" } }
+        rescue StandardError => e
+          { "status" => "error", "error" => e.message }
+        end
       end
 
       def summary(limit: 100)

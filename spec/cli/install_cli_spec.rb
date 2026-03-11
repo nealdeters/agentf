@@ -17,7 +17,7 @@ RSpec.describe Agentf::CLI::Install do
   subject(:cli) { described_class.new }
 
   describe "install with defaults" do
-    it "installs opencode manifests to local directory" do
+    it "installs opencode manifests to local directory"  , :aggregate_failures do
       output = capture_stdout do
         cli.run([
           "--provider=opencode",
@@ -36,7 +36,7 @@ RSpec.describe Agentf::CLI::Install do
   end
 
   describe "--dry-run" do
-    it "reports planned operations without writing files" do
+    it "reports planned operations without writing files"  , :aggregate_failures do
       output = capture_stdout do
         cli.run([
           "--provider=opencode",
@@ -54,7 +54,7 @@ RSpec.describe Agentf::CLI::Install do
   end
 
   describe "provider parsing" do
-    it "accepts comma-separated providers" do
+    it "accepts comma-separated providers"  , :aggregate_failures do
       output = capture_stdout do
         cli.run([
           "--provider=opencode,copilot",
@@ -72,7 +72,7 @@ RSpec.describe Agentf::CLI::Install do
   end
 
   describe "help" do
-    it "prints help text" do
+    it "prints help text"  , :aggregate_failures do
       output = capture_stdout { cli.run(["help"]) }
 
       expect(output).to include("Usage: agentf install")

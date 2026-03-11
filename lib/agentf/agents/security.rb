@@ -66,21 +66,27 @@ module Agentf
           summary = summarize_findings(findings)
 
           if findings["issues"].empty?
-            memory.store_success(
-              title: "Security review passed",
-              description: summary,
-              context: task,
-              tags: ["security", "pass"],
-              agent: name
-            )
+            res = safe_memory_write(attempted: { action: "store_success", title: "Security review passed", tags: ["security", "pass"], agent: name }) do
+              memory.store_success(
+                title: "Security review passed",
+                description: summary,
+                context: task,
+                tags: ["security", "pass"],
+                agent: name
+              )
+            end
+            return findings.merge(res) if res.is_a?(Hash) && res["confirmation_required"]
           else
-            memory.store_pitfall(
-              title: "Security findings detected",
-              description: summary,
-              context: task,
-              tags: ["security", "warning"],
-              agent: name
-            )
+            res = safe_memory_write(attempted: { action: "store_pitfall", title: "Security findings detected", tags: ["security", "warning"], agent: name }) do
+              memory.store_pitfall(
+                title: "Security findings detected",
+                description: summary,
+                context: task,
+                tags: ["security", "warning"],
+                agent: name
+              )
+            end
+            return findings.merge(res) if res.is_a?(Hash) && res["confirmation_required"]
           end
 
           findings.merge("best_practices" => @commands.best_practices)

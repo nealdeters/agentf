@@ -87,7 +87,7 @@ module Agentf
             AGENTF_WORKFLOW_CONTRACT_MODE=advisory|enforcing|off   Contract behavior mode
             AGENTF_AGENT_CONTRACT_ENABLED=true|false   Enable/disable per-agent contract checks
             AGENTF_AGENT_CONTRACT_MODE=advisory|enforcing|off   Per-agent contract behavior mode
-            AGENTF_DEFAULT_PACK=generic|rails_standard|rails_37signals|rails_feature_spec
+  (AGENTF_DEFAULT_PACK no longer used — orchestrator uses internal profiles)
             AGENTF_GEM_PATH=/path/to/gem   Path to agentf gem (for OpenCode plugin binary resolution)
 
           Examples:

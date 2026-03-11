@@ -25,7 +25,7 @@ RSpec.describe Agentf::MCP::Server do
       expect(names).to contain_exactly(*described_class::KNOWN_TOOLS)
     end
 
-    it "includes descriptions for all tools" do
+    it "includes descriptions for all tools"  , :aggregate_failures do
       tools = mcp.server.list_tools
       tools.each do |t|
         expect(t[:description]).to be_a(String)
@@ -144,7 +144,7 @@ RSpec.describe Agentf::MCP::Server do
   # ── Code tools ──────────────────────────────────────────────────
 
   describe "agentf-code-glob" do
-    it "calls explorer.glob and returns JSON" do
+    it "calls explorer.glob and returns JSON"  , :aggregate_failures do
       allow(explorer).to receive(:glob).with("lib/**/*.rb", file_types: nil)
         .and_return(["lib/agentf.rb", "lib/agentf/memory.rb"])
 
@@ -167,7 +167,7 @@ RSpec.describe Agentf::MCP::Server do
   end
 
   describe "agentf-code-grep" do
-    it "calls explorer.grep and returns JSON" do
+    it "calls explorer.grep and returns JSON"  , :aggregate_failures do
       match = { "path" => "lib/a.rb", "line_number" => 5, "content" => "class Foo" }
       allow(explorer).to receive(:grep).with("Foo", file_pattern: "*.rb", context_lines: 2)
         .and_return([match])
@@ -182,7 +182,7 @@ RSpec.describe Agentf::MCP::Server do
   end
 
   describe "agentf-code-tree" do
-    it "calls explorer.get_file_tree and returns JSON" do
+    it "calls explorer.get_file_tree and returns JSON"  , :aggregate_failures do
       tree = { "lib" => { "agentf.rb" => nil } }
       allow(explorer).to receive(:get_file_tree).with(max_depth: 3).and_return(tree)
 
@@ -203,7 +203,7 @@ RSpec.describe Agentf::MCP::Server do
   end
 
   describe "agentf-code-related-files" do
-    it "calls explorer.find_related_files and returns JSON" do
+    it "calls explorer.find_related_files and returns JSON"  , :aggregate_failures do
       related = { "imports" => ["lib/b.rb"], "tests" => ["spec/a_spec.rb"] }
       allow(explorer).to receive(:find_related_files).with("lib/a.rb").and_return(related)
 
@@ -218,7 +218,7 @@ RSpec.describe Agentf::MCP::Server do
   # ── Memory tools ────────────────────────────────────────────────
 
   describe "agentf-memory-recent" do
-    it "calls reviewer.get_recent_memories with default limit" do
+    it "calls reviewer.get_recent_memories with default limit"  , :aggregate_failures do
       allow(reviewer).to receive(:get_recent_memories).with(limit: 10).and_return(
         "count" => 1, "memories" => [{ "title" => "Test" }]
       )
@@ -255,7 +255,7 @@ RSpec.describe Agentf::MCP::Server do
   end
 
   describe "agentf-memory-add-lesson" do
-    it "stores a lesson via memory.store_episode" do
+    it "stores a lesson via memory.store_episode"  , :aggregate_failures do
       allow(memory).to receive(:store_episode).with(
         type: "lesson",
         title: "New learning",
@@ -283,7 +283,7 @@ RSpec.describe Agentf::MCP::Server do
   end
 
   describe "agentf-memory-add-success" do
-    it "stores a success via memory.store_episode" do
+    it "stores a success via memory.store_episode"  , :aggregate_failures do
       allow(memory).to receive(:store_episode).with(
         type: "success",
         title: "It worked",
@@ -307,7 +307,7 @@ RSpec.describe Agentf::MCP::Server do
   end
 
   describe "agentf-memory-add-pitfall" do
-    it "stores a pitfall via memory.store_episode" do
+    it "stores a pitfall via memory.store_episode"  , :aggregate_failures do
       allow(memory).to receive(:store_episode).with(
         type: "pitfall",
         title: "Bad deploy",

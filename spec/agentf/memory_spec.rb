@@ -12,7 +12,7 @@ RSpec.describe Agentf::Memory::RedisMemory do
       expect(memory.project).to eq(project)
     end
 
-    it "uses default project from config" do
+    it "uses default project from config"  , :aggregate_failures do
       expect(Agentf.config).to receive(:project_name).and_return("default")
       memory = described_class.new
       expect(memory.project).to eq("default")
@@ -25,7 +25,7 @@ RSpec.describe Agentf::Memory::RedisMemory do
       expect(memory).to respond_to(:store_task)
     end
 
-    it "serializes embedding as JSON, not Ruby Array#to_s" do
+    it "serializes embedding as JSON, not Ruby Array#to_s"  , :aggregate_failures do
       memory = described_class.new(project: project)
       task_id = memory.store_task(content: "Test", embedding: [1.0, 2.0, 3.0])
 
@@ -104,7 +104,8 @@ RSpec.describe Agentf::Memory::RedisMemory do
         description: "Gateway timed out",
         root_cause: "Downstream latency",
         resolution: "Increase timeout",
-        tags: ["payments"]
+        tags: ["payments"],
+        confirm: true
       )
 
       incidents = memory.get_memories_by_type(type: "incident", limit: 10)
@@ -117,7 +118,8 @@ RSpec.describe Agentf::Memory::RedisMemory do
         title: "Release rollout",
         description: "Safe deployment steps",
         steps: ["deploy canary", "monitor", "promote"],
-        tags: ["release"]
+        tags: ["release"],
+        confirm: true
       )
 
       playbooks = memory.get_memories_by_type(type: "playbook", limit: 10)
@@ -126,11 +128,11 @@ RSpec.describe Agentf::Memory::RedisMemory do
   end
 
   describe "agent context ranking" do
-    it "prioritizes architect intent and playbook records" do
+    it "prioritizes architect intent and playbook records"  , :aggregate_failures do
       memory = described_class.new(project: project)
-      memory.store_feature_intent(title: "Feature intent", description: "Build reporting")
-      memory.store_playbook(title: "Architecture playbook", description: "Use modular boundaries")
-      memory.store_pitfall(title: "Old pitfall", description: "Legacy mistake")
+      memory.store_feature_intent(title: "Feature intent", description: "Build reporting", confirm: true)
+      memory.store_playbook(title: "Architecture playbook", description: "Use modular boundaries", confirm: true)
+      memory.store_pitfall(title: "Old pitfall", description: "Legacy mistake", confirm: true)
 
       context = memory.get_agent_context(agent: "PLANNER", task_type: "feature", limit: 2)
 
@@ -165,7 +167,7 @@ RSpec.describe Agentf::Memory::RedisMemory do
       expect(result).to eq([])
     end
 
-    it "returns similar tasks by embedding score" do
+    it "returns similar tasks by embedding score"  , :aggregate_failures do
       memory = described_class.new(project: project)
       memory.store_task(content: "Build auth", embedding: [1.0, 0.0], task_type: "feature", language: "ruby")
       memory.store_task(content: "Fix bug", embedding: [0.0, 1.0], task_type: "bugfix", language: "ruby")
@@ -178,7 +180,7 @@ RSpec.describe Agentf::Memory::RedisMemory do
   end
 
   describe "#get_relevant_context" do
-    it "returns structured context with intents and memories" do
+    it "returns structured context with intents and memories"  , :aggregate_failures do
       memory = described_class.new(project: project)
       context = memory.get_relevant_context(agent: "PLANNER", query_embedding: [0.2, 0.1], limit: 3)
 
@@ -206,7 +208,7 @@ RSpec.describe Agentf::Memory::RedisMemory do
   end
 
   describe "deletion APIs" do
-    it "deletes memory by id in current project" do
+    it "deletes memory by id in current project"  , :aggregate_failures do
       memory = described_class.new(project: project)
       id = memory.store_lesson(title: "L1", description: "d", tags: [])
 
@@ -217,7 +219,7 @@ RSpec.describe Agentf::Memory::RedisMemory do
       expect(recent.map { |m| m["id"] }).not_to include(id)
     end
 
-    it "dry-runs delete all without removing records" do
+    it "dry-runs delete all without removing records"  , :aggregate_failures do
       memory = described_class.new(project: project)
       memory.store_lesson(title: "L1", description: "d", tags: [])
 
@@ -229,7 +231,7 @@ RSpec.describe Agentf::Memory::RedisMemory do
       expect(memory.get_recent_memories(limit: 20)).not_to be_empty
     end
 
-    it "deletes last N memories" do
+    it "deletes last N memories"  , :aggregate_failures do
       memory = described_class.new(project: project)
       3.times { |i| memory.store_lesson(title: "L#{i}", description: "d", tags: []) }
 
@@ -238,7 +240,7 @@ RSpec.describe Agentf::Memory::RedisMemory do
       expect(result["deleted_ids"].length).to eq(2)
     end
 
-    it "filters delete all by type" do
+    it "filters delete all by type"  , :aggregate_failures do
       memory = described_class.new(project: project)
       memory.store_lesson(title: "L", description: "d", tags: [])
       memory.store_pitfall(title: "P", description: "d", tags: [])
@@ -252,7 +254,7 @@ RSpec.describe Agentf::Memory::RedisMemory do
   end
 
   describe ".memory" do
-    it "creates a new RedisMemory instance" do
+    it "creates a new RedisMemory instance"  , :aggregate_failures do
       mem = Agentf::Memory.memory(project: "custom-project")
       expect(mem).to be_a(Agentf::Memory::RedisMemory)
       expect(mem.project).to eq("custom-project")

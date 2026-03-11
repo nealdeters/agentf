@@ -4,7 +4,7 @@ RSpec.describe Agentf::Service::Providers::OpenCode do
   subject(:provider) { described_class.new }
 
   describe "#build_plan" do
-    it "detects workflow type from task text" do
+    it "detects workflow type from task text"  , :aggregate_failures do
       result = provider.build_plan(
         task: "Fix login bug"
       )
@@ -44,7 +44,7 @@ RSpec.describe Agentf::Service::Providers::OpenCode do
       expect(result["error"]).to eq("Agent UNKNOWN not found")
     end
 
-    it "supports tester red phase in TDD mode" do
+    it "supports tester red phase in TDD mode"  , :aggregate_failures do
       tester = instance_double(Agentf::Agents::Tester)
       tester_commands = instance_double(Agentf::Commands::Tester)
       allow(tester_commands).to receive(:generate_unit_tests)
@@ -68,7 +68,7 @@ RSpec.describe Agentf::Service::Providers::Copilot do
   subject(:provider) { described_class.new }
 
   describe "#build_plan" do
-    it "uses copilot workflow templates" do
+    it "uses copilot workflow templates"  , :aggregate_failures do
       result = provider.build_plan(task: "Add feature")
 
       expect(result["provider"]).to eq("COPILOT")

@@ -10,7 +10,7 @@ RSpec.describe Agentf::CLI::Code do
   subject(:cli) { described_class.new(explorer: explorer) }
 
   describe "glob command" do
-    it "returns JSON payload" do
+    it "returns JSON payload"  , :aggregate_failures do
       allow(explorer).to receive(:glob).with("app/**/*.rb", file_types: nil).and_return(
         ["app/models/user.rb", "app/controllers/api.rb"]
       )
@@ -39,7 +39,7 @@ RSpec.describe Agentf::CLI::Code do
   end
 
   describe "grep command" do
-    it "returns JSON payload with matches" do
+    it "returns JSON payload with matches"  , :aggregate_failures do
       match = { "path" => "lib/agentf.rb", "line_number" => 10, "content" => "class WorkflowEngine" }
       allow(explorer).to receive(:grep).with("WorkflowEngine", file_pattern: "*.rb", context_lines: 2)
         .and_return([match])
@@ -63,7 +63,7 @@ RSpec.describe Agentf::CLI::Code do
   end
 
   describe "tree command" do
-    it "returns JSON payload" do
+    it "returns JSON payload"  , :aggregate_failures do
       tree = { "lib" => { "agentf.rb" => nil } }
       allow(explorer).to receive(:get_file_tree).with(max_depth: 3).and_return(tree)
 
@@ -85,7 +85,7 @@ RSpec.describe Agentf::CLI::Code do
   end
 
   describe "related command" do
-    it "returns JSON payload with related file data" do
+    it "returns JSON payload with related file data"  , :aggregate_failures do
       related = { "imports" => ["lib/b.rb"], "tests" => ["spec/a_spec.rb"] }
       allow(explorer).to receive(:find_related_files).with("app/models/user.rb").and_return(related)
 
@@ -103,7 +103,7 @@ RSpec.describe Agentf::CLI::Code do
   end
 
   describe "help output" do
-    it "includes usage info and examples" do
+    it "includes usage info and examples"  , :aggregate_failures do
       output = capture_stdout { cli.run(["help"]) }
 
       aggregate_failures do

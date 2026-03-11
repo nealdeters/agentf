@@ -7,7 +7,7 @@ RSpec.describe Agentf::Commands::Metrics do
   subject(:metrics) { described_class.new(memory: memory, project: "test-project") }
 
   describe ".manifest" do
-    it "exposes command metadata" do
+    it "exposes command metadata"  , :aggregate_failures do
       manifest = described_class.manifest
       expect(manifest["name"]).to eq("metrics")
       command_names = manifest["commands"].map { |cmd| cmd["name"] }
@@ -16,7 +16,7 @@ RSpec.describe Agentf::Commands::Metrics do
   end
 
   describe "#record_workflow" do
-    it "records workflow metrics as episodic memory" do
+    it "records workflow metrics as episodic memory"  , :aggregate_failures do
       workflow_state = {
         "provider" => "OPENCODE",
         "workflow_type" => "feature",
@@ -43,7 +43,7 @@ RSpec.describe Agentf::Commands::Metrics do
   end
 
   describe "#summary" do
-    it "aggregates workflow quality metrics" do
+    it "aggregates workflow quality metrics"  , :aggregate_failures do
       metrics.record_workflow(
         "provider" => "OPENCODE",
         "workflow_type" => "feature",
@@ -79,7 +79,7 @@ RSpec.describe Agentf::Commands::Metrics do
   end
 
   describe "#provider_parity" do
-    it "returns provider gap metrics" do
+    it "returns provider gap metrics"  , :aggregate_failures do
       metrics.record_workflow(
         "provider" => "OPENCODE",
         "workflow_type" => "feature",

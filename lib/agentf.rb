@@ -16,7 +16,7 @@ module Agentf
     attr_reader :redis_url
     attr_accessor :project_name, :base_path, :metrics_enabled, :workflow_contract_enabled,
                   :workflow_contract_mode, :agent_contract_enabled, :agent_contract_mode,
-                  :default_pack, :gem_path
+                  :gem_path
 
     def initialize
       @redis_url = normalize_redis_url(ENV.fetch("REDIS_URL", "redis://localhost:6379"))
@@ -37,7 +37,7 @@ module Agentf
       @agent_contract_mode = normalize_contract_mode(
         ENV.fetch("AGENTF_AGENT_CONTRACT_MODE", "enforcing")
       )
-      @default_pack = ENV.fetch("AGENTF_DEFAULT_PACK", "generic").to_s.strip.downcase
+      # Default profile removed; orchestrator defaults to "generic" internally.
       @gem_path = ENV.fetch("AGENTF_GEM_PATH", nil)
     end
 
@@ -87,7 +87,9 @@ require_relative "agentf/tools"
 require_relative "agentf/commands"
 require_relative "agentf/service/providers"
 require_relative "agentf/context_builder"
-require_relative "agentf/packs"
+# Profiles previously lived in lib/agentf/packs.rb; the profile data is now
+# embedded in the orchestrator (WorkflowEngine::PROFILES). The old file was
+# removed as part of simplifying the profile surface.
 require_relative "agentf/agent_policy"
 require_relative "agentf/agent_execution_contract"
 require_relative "agentf/workflow_contract"

@@ -4,14 +4,14 @@ RSpec.describe Agentf::Commands::SecurityScanner do
   subject(:scanner) { described_class.new }
 
   describe "#scan" do
-    it "returns no issues for benign input" do
+    it "returns no issues for benign input"  , :aggregate_failures do
       result = scanner.scan(task: "Build a login form", context: { "note" => "No secrets here" })
 
       expect(result["issues"]).to be_empty
       expect(result["score"]).to eq(0)
     end
 
-    it "flags suspected secrets" do
+    it "flags suspected secrets"  , :aggregate_failures do
       context = { "env" => "AWS key AKIA1234567890ABCD12" }
       result = scanner.scan(task: "Deploy", context: context)
 
@@ -31,7 +31,7 @@ RSpec.describe Agentf::Commands::SecurityScanner do
   end
 
   describe "#best_practices" do
-    it "returns an array of recommendations" do
+    it "returns an array of recommendations"  , :aggregate_failures do
       expect(scanner.best_practices).to all(be_a(String))
       expect(scanner.best_practices).not_to be_empty
     end

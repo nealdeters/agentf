@@ -51,7 +51,8 @@ module Agentf
         end
 
         def pack_workflow_templates
-          Agentf::Packs.fetch(@pack).fetch("workflow_templates")
+          # Workflow templates are now provided by the orchestrator profiles
+          Agentf::WorkflowEngine::PROFILES.fetch(@pack, Agentf::WorkflowEngine::PROFILES["generic"]).fetch("workflow_templates")
         end
 
         def execute_agent(agent_name:, task:, context:, agents:, commands:, logger: nil)

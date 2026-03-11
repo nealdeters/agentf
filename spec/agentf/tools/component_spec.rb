@@ -13,7 +13,7 @@ RSpec.describe Agentf::Tools::ComponentSpec do
     )
   end
 
-  it "exposes basic attributes" do
+  it "exposes basic attributes"  , :aggregate_failures do
     expect(component.name).to eq("Button")
     expect(component.code).to include("<button>")
     expect(component.framework).to eq("react")

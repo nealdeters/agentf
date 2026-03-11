@@ -12,7 +12,6 @@ RSpec.describe Agentf::Config do
       original_contract_mode = ENV.delete("AGENTF_WORKFLOW_CONTRACT_MODE")
       original_agent_contract_enabled = ENV.delete("AGENTF_AGENT_CONTRACT_ENABLED")
       original_agent_contract_mode = ENV.delete("AGENTF_AGENT_CONTRACT_MODE")
-      original_default_pack = ENV.delete("AGENTF_DEFAULT_PACK")
 
       example.run
     ensure
@@ -23,7 +22,6 @@ RSpec.describe Agentf::Config do
       original_contract_mode.nil? ? ENV.delete("AGENTF_WORKFLOW_CONTRACT_MODE") : ENV["AGENTF_WORKFLOW_CONTRACT_MODE"] = original_contract_mode
       original_agent_contract_enabled.nil? ? ENV.delete("AGENTF_AGENT_CONTRACT_ENABLED") : ENV["AGENTF_AGENT_CONTRACT_ENABLED"] = original_agent_contract_enabled
       original_agent_contract_mode.nil? ? ENV.delete("AGENTF_AGENT_CONTRACT_MODE") : ENV["AGENTF_AGENT_CONTRACT_MODE"] = original_agent_contract_mode
-      original_default_pack.nil? ? ENV.delete("AGENTF_DEFAULT_PACK") : ENV["AGENTF_DEFAULT_PACK"] = original_default_pack
     end
 
     it "uses default Redis URL from env" do
@@ -38,19 +36,17 @@ RSpec.describe Agentf::Config do
       expect(config.metrics_enabled).to be true
     end
 
-    it "enables workflow contract by default" do
+    it "enables workflow contract by default"  , :aggregate_failures do
       expect(config.workflow_contract_enabled).to be true
       expect(config.workflow_contract_mode).to eq("advisory")
     end
 
-    it "enables agent contract by default in enforcing mode" do
+    it "enables agent contract by default in enforcing mode"  , :aggregate_failures do
       expect(config.agent_contract_enabled).to be true
       expect(config.agent_contract_mode).to eq("enforcing")
     end
 
-    it "uses generic pack by default" do
-      expect(config.default_pack).to eq("generic")
-    end
+    # default profile behaviour removed; orchestrator defaults to "generic"
 
     it "disables metrics when env flag is false" do
       ENV["AGENTF_METRICS_ENABLED"] = "false"
@@ -58,7 +54,7 @@ RSpec.describe Agentf::Config do
       expect(flagged_config.metrics_enabled).to be false
     end
 
-    it "supports contract env flags" do
+    it "supports contract env flags"  , :aggregate_failures do
       ENV["AGENTF_WORKFLOW_CONTRACT_ENABLED"] = "false"
       ENV["AGENTF_WORKFLOW_CONTRACT_MODE"] = "enforcing"
       ENV["AGENTF_AGENT_CONTRACT_ENABLED"] = "false"
@@ -92,17 +88,15 @@ RSpec.describe Agentf::Config do
       expect(config.metrics_enabled).to be false
     end
 
-    it "allows setting workflow contract and pack fields" do
+    it "allows setting workflow contract fields"  , :aggregate_failures do
       config.workflow_contract_enabled = false
       config.workflow_contract_mode = "off"
       config.agent_contract_enabled = false
       config.agent_contract_mode = "off"
-      config.default_pack = "rails_standard"
       expect(config.workflow_contract_enabled).to be false
       expect(config.workflow_contract_mode).to eq("off")
       expect(config.agent_contract_enabled).to be false
       expect(config.agent_contract_mode).to eq("off")
-      expect(config.default_pack).to eq("rails_standard")
     end
   end
 end

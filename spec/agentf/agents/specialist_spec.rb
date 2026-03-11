@@ -6,7 +6,7 @@ RSpec.describe Agentf::Agents::Specialist do
   subject(:specialist) { described_class.new(memory) }
 
   describe "#execute" do
-    it "stores success memory when subtask succeeds" do
+    it "stores success memory when subtask succeeds"  , :aggregate_failures do
       subtask = {
         "id" => "sub_1",
         "description" => "Build auth module",
@@ -28,7 +28,7 @@ RSpec.describe Agentf::Agents::Specialist do
       expect(result["subtask_id"]).to eq("sub_1")
     end
 
-    it "stores pitfall memory when subtask fails" do
+    it "stores pitfall memory when subtask fails"  , :aggregate_failures do
       subtask = {
         "id" => "sub_2",
         "description" => "Deploy service",
@@ -50,7 +50,7 @@ RSpec.describe Agentf::Agents::Specialist do
       expect(result["subtask_id"]).to eq("sub_2")
     end
 
-    it "defaults to success when subtask has no explicit success key" do
+    it "defaults to success when subtask has no explicit success key"  , :aggregate_failures do
       subtask = {
         "id" => "sub_3",
         "description" => "Run tests",

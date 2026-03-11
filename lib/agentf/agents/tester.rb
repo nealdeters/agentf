@@ -63,13 +63,20 @@ module Agentf
 
         template = @commands.generate_unit_tests(code_file)
 
-        memory.store_success(
-          title: "Generated #{test_type} tests for #{code_file}",
-          description: "Created #{template.test_file} with #{test_type} tests",
-          context: "Test framework: #{template.framework}",
-          tags: ["testing", test_type, code_file.split(".").last],
-          agent: name
-        )
+        res = safe_memory_write(attempted: { action: "store_success", title: "Generated #{test_type} tests for #{code_file}", tags: ["testing", test_type, code_file.split(".").last], agent: name }) do
+          memory.store_success(
+            title: "Generated #{test_type} tests for #{code_file}",
+            description: "Created #{template.test_file} with #{test_type} tests",
+            context: "Test framework: #{template.framework}",
+            tags: ["testing", test_type, code_file.split(".").last],
+            agent: name
+          )
+        end
+
+        if res.is_a?(Hash) && res["confirmation_required"]
+          log "Memory confirmation required when storing generated tests: #{res['confirmation_details'].inspect}"
+          return { "test_file" => template.test_file, "test_type" => test_type, "generated_code" => template.test_code, "confirmation_required" => true, "confirmation_details" => res["confirmation_details"], "attempted" => res["attempted"] }
+        end
 
         log "Created: #{template.test_file}"
 

@@ -5,7 +5,7 @@ RSpec.describe Agentf::ContextBuilder do
   subject(:builder) { described_class.new(memory: memory) }
 
   describe "#build" do
-    it "delegates to memory get_agent_context" do
+    it "delegates to memory get_agent_context"  , :aggregate_failures do
       workflow_state = { "task" => "Fix payment bug", "workflow_type" => "bugfix" }
       payload = { "agent" => "INCIDENT_RESPONDER", "memories" => [] }
 
@@ -20,7 +20,7 @@ RSpec.describe Agentf::ContextBuilder do
       expect(result).to eq(payload)
     end
 
-    it "returns safe fallback on memory failures" do
+    it "returns safe fallback on memory failures"  , :aggregate_failures do
       allow(memory).to receive(:get_agent_context).and_raise("boom")
 
       result = builder.build(agent: "PLANNER", workflow_state: { "task" => "Add feature", "workflow_type" => "feature" })

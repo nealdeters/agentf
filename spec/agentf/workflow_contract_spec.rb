@@ -2,14 +2,14 @@
 
 RSpec.describe Agentf::WorkflowContract do
   describe "#check" do
-    it "passes when disabled" do
+    it "passes when disabled"  , :aggregate_failures do
       contract = described_class.new(enabled: false, mode: "advisory")
       result = contract.check(stage: "spec", workflow_state: {})
       expect(result["ok"]).to be true
       expect(result["blocked"]).to be false
     end
 
-    it "flags missing spec context" do
+    it "flags missing spec context"  , :aggregate_failures do
       contract = described_class.new(enabled: true, mode: "advisory")
       result = contract.check(stage: "spec", workflow_state: { "context" => {} })
       expect(result["ok"]).to be false
