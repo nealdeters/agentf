@@ -66,14 +66,32 @@ module Agentf
 
           analysis = @commands.parse_error(error)
 
-          memory.store_episode(
-            type: "lesson",
-            title: "Debugged: #{error[0..50]}...",
-            description: "Root cause: #{analysis.possible_causes.first}. Fix: #{analysis.suggested_fix}",
-            context: context.to_s,
-            tags: ["debugging", "error", "fix"],
-            agent: name
-          )
+          res = safe_memory_write(attempted: { action: "store_lesson", title: "Debugged: #{error[0..50]}...", tags: ["debugging", "error", "fix"], agent: name }) do
+            memory.store_episode(
+              type: "lesson",
+              title: "Debugged: #{error[0..50]}...",
+              description: "Root cause: #{analysis.possible_causes.first}. Fix: #{analysis.suggested_fix}",
+              context: context.to_s,
+              tags: ["debugging", "error", "fix"],
+              agent: name
+            )
+          end
+
+          if res.is_a?(Hash) && res["confirmation_required"]
+            log "Root cause: #{analysis.possible_causes.first}"
+            log "Suggested fix: #{analysis.suggested_fix}"
+            return {
+              "success" => false,
+              "confirmation_required" => true,
+              "confirmation_details" => res["confirmation_details"],
+              "analysis" => {
+                "error_type" => analysis.error_type,
+                "possible_causes" => analysis.possible_causes,
+                "suggested_fix" => analysis.suggested_fix,
+                "stack_trace" => analysis.stack_trace
+              }
+            }
+          end
 
           log "Root cause: #{analysis.possible_causes.first}"
           log "Suggested fix: #{analysis.suggested_fix}"

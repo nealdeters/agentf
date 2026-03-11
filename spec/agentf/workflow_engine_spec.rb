@@ -80,6 +80,35 @@ RSpec.describe Agentf::WorkflowEngine do
       engine.execute("Add feature")
     end
 
+    it "records memory confirmation events when persistence requires confirmation" do
+      confirmation = Agentf::Memory::RedisMemory::ConfirmationRequired.new("confirm", { reason: "ask_first" })
+
+      memory_with_confirmation = double(
+        "memory",
+        get_recent_memories: [],
+        get_pitfalls: [],
+        get_agent_context: {},
+        store_episode: nil,
+        store_success: nil,
+        store_pitfall: nil,
+        store_lesson: nil,
+        get_relevant_context: {}
+      )
+
+      allow(memory_with_confirmation).to receive(:store_feature_intent).and_raise(confirmation)
+
+      engine = described_class.new(memory: memory_with_confirmation, base_path: base_path, provider: :opencode)
+
+      result = engine.execute("Add feature")
+
+      expect(result).to have_key("memory_confirmation_required")
+      expect(result["memory_confirmation_required"]).to be_an(Array)
+      expect(result["memory_confirmation_required"].length).to be >= 1
+      first = result["memory_confirmation_required"].first
+      expect(first["confirmation_required"]).to be(true)
+      expect(first["confirmation_details"]).to eq(confirmation.details)
+    end
+
     it "does not initialize metrics command when metrics are disabled" do
       Agentf.config.metrics_enabled = false
       engine = described_class.new(memory: memory, base_path: base_path, provider: :opencode)

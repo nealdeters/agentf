@@ -64,13 +64,19 @@ module Agentf
 
           spec = @commands.generate_component("GeneratedComponent", design_spec)
 
-          memory.store_success(
-            title: "Implemented design: #{design_spec}",
-            description: "Created #{spec.name} in #{spec.framework}",
-            context: "Framework: #{framework}",
-            tags: ["design", "ui", framework],
-            agent: name
-          )
+          res = safe_memory_write(attempted: { action: "store_success", title: "Implemented design: #{design_spec}", tags: ["design", "ui", framework], agent: name }) do
+            memory.store_success(
+              title: "Implemented design: #{design_spec}",
+              description: "Created #{spec.name} in #{spec.framework}",
+              context: "Framework: #{framework}",
+              tags: ["design", "ui", framework],
+              agent: name
+            )
+          end
+
+          if res.is_a?(Hash) && res["confirmation_required"]
+            return { "design_spec" => design_spec, "component" => spec.name, "framework" => framework, "generated_code" => spec.code, "success" => true }.merge(res)
+          end
 
           log "Created component: #{spec.name}"
 

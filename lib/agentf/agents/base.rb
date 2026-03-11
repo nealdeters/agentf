@@ -52,14 +52,14 @@ module Agentf
         }
       end
 
-      def initialize(memory)
-        @memory = memory
-        @name = self.class.typed_name
-        @execution_contract = Agentf::AgentExecutionContract.new(
-          enabled: Agentf.config.agent_contract_enabled,
-          mode: Agentf.config.agent_contract_mode
-        )
-      end
+    def initialize(memory)
+      @memory = memory
+      @name = self.class.typed_name
+      @execution_contract = Agentf::AgentExecutionContract.new(
+        enabled: Agentf.config.agent_contract_enabled,
+        mode: Agentf.config.agent_contract_mode
+      )
+    end
 
       def log(message)
         puts "\n[#{@name}] #{message}"
@@ -83,8 +83,22 @@ module Agentf
           result: result
         )
 
-        result
+      result
+    end
+
+    # Helper to centralize memory write confirmation handling.
+    # Yields a block that performs the memory write. If the memory layer
+    # requires confirmation (ask_first policy) a structured hash is
+    # returned with confirmation details so agents can merge that into
+    # their own return payloads or let the orchestrator handle prompting.
+    def safe_memory_write(attempted: {})
+      begin
+        yield
+      rescue Agentf::Memory::RedisMemory::ConfirmationRequired => e
+        log "[MEMORY] Confirmation required: #{e.message} -- details=#{e.details.inspect}"
+        { "confirmation_required" => true, "confirmation_details" => e.details, "attempted" => attempted }
       end
+    end
     end
   end
 end

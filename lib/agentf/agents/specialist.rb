@@ -64,23 +64,35 @@ module Agentf
           success = normalized_subtask.fetch("success", true)
 
           if success
-            memory.store_success(
-              title: "Completed: #{normalized_subtask['description']}",
-              description: "Successfully executed subtask #{normalized_subtask['id']}",
-              context: "Working on #{normalized_subtask.fetch('task', 'unknown task')}",
-              tags: ["implementation", normalized_subtask.fetch("language", "general")],
-              agent: name
-            )
-            log "Stored success memory"
+            res = safe_memory_write(attempted: { action: "store_success", title: "Completed: #{normalized_subtask['description']}", tags: ["implementation", normalized_subtask.fetch("language", "general")], agent: name }) do
+              memory.store_success(
+                title: "Completed: #{normalized_subtask['description']}",
+                description: "Successfully executed subtask #{normalized_subtask['id']}",
+                context: "Working on #{normalized_subtask.fetch('task', 'unknown task')}",
+                tags: ["implementation", normalized_subtask.fetch("language", "general")],
+                agent: name
+              )
+            end
+
+            if res.is_a?(Hash) && res["confirmation_required"]
+              log "Memory confirmation required when storing success: #{res['confirmation_details'].inspect}"
+              return { "subtask_id" => normalized_subtask["id"], "success" => success, "result" => "Code executed", "confirmation_required" => true, "confirmation_details" => res["confirmation_details"], "attempted" => res["attempted"] }
+            end
           else
-            memory.store_pitfall(
-              title: "Failed: #{normalized_subtask['description']}",
-              description: "Subtask #{normalized_subtask['id']} failed",
-              context: "Working on #{normalized_subtask.fetch('task', 'unknown task')}",
-              tags: ["failure", "implementation"],
-              agent: name
-            )
-            log "Stored pitfall memory"
+            res = safe_memory_write(attempted: { action: "store_pitfall", title: "Failed: #{normalized_subtask['description']}", tags: ["failure", "implementation"], agent: name }) do
+              memory.store_pitfall(
+                title: "Failed: #{normalized_subtask['description']}",
+                description: "Subtask #{normalized_subtask['id']} failed",
+                context: "Working on #{normalized_subtask.fetch('task', 'unknown task')}",
+                tags: ["failure", "implementation"],
+                agent: name
+              )
+            end
+
+            if res.is_a?(Hash) && res["confirmation_required"]
+              log "Memory confirmation required when storing pitfall: #{res['confirmation_details'].inspect}"
+              return { "subtask_id" => normalized_subtask["id"], "success" => success, "result" => "Code executed", "confirmation_required" => true, "confirmation_details" => res["confirmation_details"], "attempted" => res["attempted"] }
+            end
           end
 
           { "subtask_id" => normalized_subtask["id"], "success" => success, "result" => "Code executed" }

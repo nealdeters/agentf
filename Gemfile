@@ -9,4 +9,5 @@ group :development, :test do
   gem "rake"
   gem "rspec", "~> 3.12"
   gem "fakeredis", ">= 0.9.0"
+  gem "simplecov", "~> 0.21"
 end

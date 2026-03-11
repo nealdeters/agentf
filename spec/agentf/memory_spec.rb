@@ -104,7 +104,8 @@ RSpec.describe Agentf::Memory::RedisMemory do
         description: "Gateway timed out",
         root_cause: "Downstream latency",
         resolution: "Increase timeout",
-        tags: ["payments"]
+        tags: ["payments"],
+        confirm: true
       )
 
       incidents = memory.get_memories_by_type(type: "incident", limit: 10)
@@ -117,7 +118,8 @@ RSpec.describe Agentf::Memory::RedisMemory do
         title: "Release rollout",
         description: "Safe deployment steps",
         steps: ["deploy canary", "monitor", "promote"],
-        tags: ["release"]
+        tags: ["release"],
+        confirm: true
       )
 
       playbooks = memory.get_memories_by_type(type: "playbook", limit: 10)
@@ -128,9 +130,9 @@ RSpec.describe Agentf::Memory::RedisMemory do
   describe "agent context ranking" do
     it "prioritizes architect intent and playbook records" do
       memory = described_class.new(project: project)
-      memory.store_feature_intent(title: "Feature intent", description: "Build reporting")
-      memory.store_playbook(title: "Architecture playbook", description: "Use modular boundaries")
-      memory.store_pitfall(title: "Old pitfall", description: "Legacy mistake")
+      memory.store_feature_intent(title: "Feature intent", description: "Build reporting", confirm: true)
+      memory.store_playbook(title: "Architecture playbook", description: "Use modular boundaries", confirm: true)
+      memory.store_pitfall(title: "Old pitfall", description: "Legacy mistake", confirm: true)
 
       context = memory.get_agent_context(agent: "PLANNER", task_type: "feature", limit: 2)
 

@@ -30,9 +30,10 @@ module Agentf
         }
       end
 
-      def initialize(project: nil)
+      def initialize(project: nil, memory: nil)
         @project = project || Agentf.config.project_name
-        @memory = Agentf::Memory::RedisMemory.new(project: @project)
+        # Allow injecting a memory instance for testing; default to real RedisMemory
+        @memory = memory || Agentf::Memory::RedisMemory.new(project: @project)
       end
 
       # Get recent memories

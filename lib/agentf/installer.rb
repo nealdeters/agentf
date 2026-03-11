@@ -175,6 +175,11 @@ module Agentf
         File.join(root, ".opencode/plugins/agentf-plugin.ts"),
         render_opencode_plugin
       )
+      # Backwards-compatible helper: expose individual tool wrappers
+      writes << write_manifest(
+        File.join(root, ".opencode/tools/agentf-tools.ts"),
+        render_opencode_tools
+      )
       writes << write_manifest(
         File.join(root, ".opencode/tsconfig.json"),
         render_opencode_tsconfig
@@ -849,6 +854,57 @@ module Agentf
         };
 
         export default agentfPlugin;
+      TYPESCRIPT
+    end
+
+    def render_opencode_tools
+      <<~'TYPESCRIPT'
+        // Lightweight wrappers to expose individual tools. These call the local `agentf` CLI
+        // and are provided for backwards compatibility with older workflows that expected
+        // a `/.opencode/tools/agentf-tools.ts` file.
+        import { execFile } from "child_process";
+        import { promisify } from "util";
+        import path from "path";
+        import fs from "fs";
+
+        const execFileAsync = promisify(execFile);
+
+        async function runAgentf(args: string[], cwd = process.cwd()) {
+          const binary = "agentf";
+          const cmdArgs = ["--json", ...args];
+          const { stdout } = await execFileAsync(binary, cmdArgs, { cwd });
+          return stdout.toString().trim() || "{}";
+        }
+
+        export async function codeGlob(pattern: string, types?: string[]) {
+          const args = ["code", "glob", pattern];
+          if (types && types.length) args.push(`--types=${types.join(",")}`);
+          return runAgentf(args);
+        }
+
+        export async function codeGrep(pattern: string, filePattern?: string, context?: number) {
+          const args = ["code", "grep", pattern];
+          if (filePattern) args.push(`--file-pattern=${filePattern}`);
+          if (Number.isInteger(context)) args.push(`--context=${String(context)}`);
+          return runAgentf(args);
+        }
+
+        export async function codeTree(depth?: number) {
+          const args = ["code", "tree", `--depth=${depth ?? 3}`];
+          return runAgentf(args);
+        }
+
+        export async function memoryRecent(limit?: number) {
+          const args = ["memory", "recent", "-n", String(limit ?? 10)];
+          return runAgentf(args);
+        }
+
+        export default {
+          codeGlob,
+          codeGrep,
+          codeTree,
+          memoryRecent,
+        };
       TYPESCRIPT
     end
 
