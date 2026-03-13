@@ -57,7 +57,12 @@ module Agentf
       def store_episode(type:, title:, description:, context: "", code_snippet: "", tags: [], agent: Agentf::AgentRoles::ORCHESTRATOR,
                         related_task_id: nil, metadata: {}, entity_ids: [], relationships: [], parent_episode_id: nil, causal_from: nil, confirm: nil)
         # Determine persistence preference from the agent's policy boundaries.
-        # Precedence: never > always > ask_first > none.
+        # Precedence: never > ask_first > always > none.
+        # For local/dev testing we may bypass interactive confirmation when
+        # AGENTF_AUTO_CONFIRM_MEMORIES=true. Otherwise, when an agent declares
+        # an "ask_first" persistence preference we raise ConfirmationRequired
+        # so higher-level code (MCP server / workflow engine / CLI) can prompt
+        # the user and retry the write with confirm: true.
         auto_confirm = ENV['AGENTF_AUTO_CONFIRM_MEMORIES'] == 'true'
         pref = persistence_preference_for(agent)
 
@@ -68,22 +73,13 @@ module Agentf
           rescue StandardError
           end
           return nil
-        when :always
-          # proceed without requiring explicit confirm
         when :ask_first
-          unless agent == Agentf::AgentRoles::ORCHESTRATOR || confirm == true || auto_confirm
-            # Previously we silently returned nil when confirmation was required.
-            # That caused agents to proceed without prompting and left callers
-            # unaware a write was skipped. Raise a specific exception so callers
-            # can catch it and trigger an interactive confirmation flow.
-            details = { agent: agent, type: type, title: title, tags: tags }
-            raise ConfirmationRequired.new("confirmation required by policy for agent write", details)
-          end
-        else
-          # default conservative behavior: require explicit confirm (or env opt-in)
-          unless agent == Agentf::AgentRoles::ORCHESTRATOR || confirm == true || auto_confirm
-            details = { agent: agent, type: type, title: title, tags: tags }
-            raise ConfirmationRequired.new("confirmation required by policy for agent write", details)
+          # If the agent's policy requires asking first, and we do not have
+          # an explicit confirmation (confirm: true) and auto_confirm is not
+          # enabled, raise ConfirmationRequired so callers can handle prompting.
+          unless auto_confirm || confirm == true
+            details = { "reason" => "ask_first", "agent" => agent.to_s, "attempted" => { "type" => type, "title" => title } }
+            raise ConfirmationRequired.new("confirm", details)
           end
         end
         episode_id = "episode_#{SecureRandom.hex(4)}"
@@ -948,12 +944,12 @@ module Agentf
           persist_pattern = /persist|store|save/i
 
           never_matches = Array(boundaries["never"]).select { |s| s =~ persist_pattern }
-          always_matches = Array(boundaries["always"]).select { |s| s =~ persist_pattern }
           ask_matches = Array(boundaries["ask_first"]).select { |s| s =~ persist_pattern }
+          always_matches = Array(boundaries["always"]).select { |s| s =~ persist_pattern }
 
           return :never if never_matches.any?
-          return :always if always_matches.any? && ask_matches.empty?
           return :ask_first if ask_matches.any?
+          return :always if always_matches.any? && ask_matches.empty?
           nil
         rescue StandardError
           nil
