@@ -263,7 +263,13 @@ module Agentf
           yield
           nil
         rescue Agentf::Memory::RedisMemory::ConfirmationRequired => e
-          { "confirmation_required" => true, "confirmation_details" => e.details, "attempted" => attempted }
+          {
+            "confirmation_required" => true,
+            "confirmation_details" => e.details,
+            "attempted" => attempted,
+            "confirmed_write_token" => "confirmed",
+            "confirmation_prompt" => "Ask the user whether to save this memory. If they approve, rerun the same command with confirmation enabled. If they decline, do not retry."
+          }
         end
       end
 

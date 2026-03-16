@@ -199,4 +199,20 @@ RSpec.describe Agentf::Commands::MemoryReviewer do
       expect(result["memories"]).to all(include("type" => "feature_intent"))
     end
   end
+
+  describe "#get_intents" do
+    it "returns mixed intents through the shared memory api" do
+      intents = [
+        { "id" => "biz1", "type" => "business_intent", "title" => "Reliability", "description" => "Prioritize uptime", "tags" => [], "agent" => "PLANNER", "created_at" => Time.now.to_i },
+        { "id" => "feat1", "type" => "feature_intent", "title" => "Eval mode", "description" => "Add eval runner", "tags" => [], "agent" => "PLANNER", "created_at" => Time.now.to_i }
+      ]
+
+      allow(memory).to receive(:get_intents).with(limit: 2).and_return(intents)
+      reviewer = described_class.new(project: project, memory: memory)
+
+      result = reviewer.get_intents(limit: 2)
+      expect(result["count"]).to eq(2)
+      expect(result["memories"].map { |item| item["type"] }).to contain_exactly("business_intent", "feature_intent")
+    end
+  end
 end

@@ -10,6 +10,7 @@ pkg/
 coverage/
 spec/examples.txt
 .rspec
+tmp/evals/
 
 # IDE
 .idea/

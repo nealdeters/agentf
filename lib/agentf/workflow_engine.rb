@@ -224,8 +224,12 @@ module Agentf
         enriched_context["tdd_failure_signature"] = @workflow_state.dig("tdd", "failure_signature")
       end
 
+      # For ENGINEER, provide the current TDD phase and the expected failing
+      # test signature so the engineer can attempt a repair. Do NOT change the
+      # orchestrator-wide TDD state here; phase transitions must be driven by
+      # QA TESTER results (to ensure tests actually pass/fail).
       if agent_name == Agentf::AgentRoles::ENGINEER
-        enriched_context["tdd_phase"] = "green"
+        enriched_context["tdd_phase"] = @workflow_state.dig("tdd", "phase")
         enriched_context["expected_test_fix"] = @workflow_state.dig("tdd", "failure_signature")
       end
 
@@ -369,7 +373,7 @@ module Agentf
         handle_memory_confirmation(e, attempted: { action: "store_lesson", agent: agent_name })
       end
     rescue StandardError => e
-      log "Learning persistence skipped: #{e.message}"
+      log "Learning persistence skipped: #{e.class}: #{e.message}\n  #{Array(e.backtrace).first(6).join("\n  ")}" 
     end
 
     def summarize_workflow
@@ -424,22 +428,27 @@ module Agentf
       @workflow_state["results"] << { "agent" => "QA_TESTER_TDD_RED", "result" => red_result }
       persist_agent_learning(agent_name: Agentf::AgentRoles::QA_TESTER, result: red_result)
     rescue StandardError => e
-      log "TDD red phase skipped: #{e.message}"
+      log "TDD red phase skipped: #{e.class}: #{e.message}\n  #{Array(e.backtrace).first(6).join("\n  ")}" 
     end
 
     def transition_tdd_phase(agent_name:, result:)
       tdd = @workflow_state["tdd"]
       return unless tdd["enabled"]
 
-      if agent_name == Agentf::AgentRoles::ENGINEER
-        tdd["phase"] = "green"
-      elsif agent_name == Agentf::AgentRoles::QA_TESTER && tdd["phase"] == "green"
-        tdd["green_executed"] = true
+      # Phase transitions should be decided by QA_TESTER outcomes. When the
+      # QA tester reports a green phase and passing tests, mark the workflow
+      # as green. We avoid changing phase when ENGINEER executes to prevent
+      # optimistic transitions.
+      if agent_name == Agentf::AgentRoles::QA_TESTER
+        if result["tdd_phase"] == "green" && result["passed"] == true
+          tdd["phase"] = "green"
+          tdd["green_executed"] = true
+          tdd["failure_signature"] ||= result["failure_signature"]
+        elsif result["tdd_phase"] == "green"
+          # Tester indicated green but didn't confirm passing — keep guarded.
+          tdd["failure_signature"] ||= result["failure_signature"]
+        end
       end
-
-      return unless agent_name == Agentf::AgentRoles::QA_TESTER && result["tdd_phase"] == "green"
-
-      tdd["failure_signature"] ||= result["failure_signature"]
     end
 
     def record_workflow_metrics
@@ -450,7 +459,7 @@ module Agentf
 
       log "Metrics capture skipped: #{result['error']}"
     rescue StandardError => e
-      log "Metrics capture skipped: #{e.message}"
+      log "Metrics capture skipped: #{e.class}: #{e.message}\n  #{Array(e.backtrace).first(6).join("\n  ")}" 
     end
 
     def perform_architecture_review
@@ -499,7 +508,7 @@ module Agentf
     rescue Agentf::Memory::RedisMemory::ConfirmationRequired => e
       handle_memory_confirmation(e, attempted: { action: "store_episode", title: "Workflow contract #{evaluation['stage']}", agent: @name })
     rescue StandardError => e
-      log "Contract event persistence skipped: #{e.message}"
+      log "Contract event persistence skipped: #{e.class}: #{e.message}\n  #{Array(e.backtrace).first(6).join("\n  ")}" 
     end
 
     def append_policy_violations(policy_violations)
@@ -523,7 +532,13 @@ module Agentf
         end
       end
     rescue StandardError => e
-      log "Policy violation persistence skipped: #{e.message}"
+      log "Policy violation persistence skipped: #{e.class}: #{e.message}\n  #{Array(e.backtrace).first(6).join("\n  ")}" 
+    end
+
+    # Helper to format exceptions for concise logs. Exposed here so multiple
+    # rescue handlers can produce consistent output if desired in the future.
+    def format_exception(e)
+      "#{e.class}: #{e.message}\n  #{Array(e.backtrace).first(6).join("\n  ")}"
     end
 
     # Handle a memory confirmation exception by recording an event in the

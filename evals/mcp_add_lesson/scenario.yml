@@ -1,0 +1,14 @@
+name: mcp_add_lesson
+description: MCP memory tool stores a lesson and exposes the result for verification.
+execution_mode: mcp
+mcp_tool: agentf-memory-add-lesson
+prompt_format: json
+timeout_seconds: 30
+auto_confirm_memories: true
+providers:
+  - mcp
+models:
+  - deterministic-cli
+tags:
+  - mcp
+  - memory

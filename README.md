@@ -56,6 +56,7 @@ agentf memory recent -n 5
 agentf code glob "lib/**/*.rb"
 agentf metrics summary -n 100
 agentf mcp-server
+agentf eval list
 ```
 
 ## Core commands
@@ -67,6 +68,7 @@ agentf mcp-server
 - `agentf architecture ...` analyze layer distribution
 - `agentf metrics ...` inspect workflow quality and provider parity
 - `agentf mcp-server` run MCP server over stdio
+- `agentf eval ...` run black-box eval scenarios against `agentf agent`
 - `agentf help` show command help
 
 For command details, run:
@@ -104,6 +106,46 @@ bundle exec rspec spec/
 
 When making changes to the CLI or gemspec use `bundle exec rake install` to
 install the locally built gem into your system Ruby gems for manual testing.
+
+## Evals
+
+Agentf includes a black-box eval harness under `evals/` for proof-based testing.
+Each scenario includes:
+
+- `scenario.yml` metadata such as agent, timeout, tags, and env overrides
+- `prompt.txt` the exact payload sent to `agentf agent`
+- `setup.sh` optional environment preparation
+- `verify.sh` required assertions against filesystem, CLI output, or Redis state
+
+Supported scenario metadata includes:
+
+- `execution_mode: agent|mcp`
+- `retry_on_confirmation: true|false` for non-interactive retry flows
+- `execution_mode: provider` for installer + provider-facing artifact proof
+- `execution_mode: provider_runtime` for generated host/plugin runtime proof
+- `providers` / `models` tags for matrix summaries
+
+Useful commands:
+
+```bash
+agentf eval list
+agentf eval run engineer_store_success
+agentf eval run engineer_confirmation_retry
+agentf eval run mcp_add_lesson
+agentf eval run provider_install_opencode
+agentf eval run provider_runtime_opencode_recent
+agentf eval run provider_runtime_copilot_recent
+agentf eval report
+agentf eval report --scenario=engineer_confirmation_retry --since=2026-03-16T00:00:00Z
+agentf eval run all --json
+```
+
+Artifacts are written to `tmp/evals/` by default. The initial scenarios focus on
+direct `agentf agent` execution plus in-process MCP tool evals. Opencode installs
+now default to MCP-first configuration; the legacy plugin runtime remains
+available as an explicit fallback. Results are also appended to
+`tmp/evals/history.jsonl` and aggregated into provider/model matrix summaries so
+compatibility trends can be compared over time.
 
 ## License
 

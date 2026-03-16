@@ -1,0 +1,25 @@
+name: provider_runtime_opencode_recent
+description: Executes the installed opencode plugin tool against the generated runtime surface.
+execution_mode: provider_runtime
+provider: opencode
+provider_runtime_tool: agentf-memory-recent
+provider_scope: local
+provider_install_deps: false
+prompt_format: json
+timeout_seconds: 30
+env:
+  AGENTF_EVAL_OPENCODE_RUNTIME: plugin
+install_agents:
+  - planner
+install_commands:
+  - debugger
+providers:
+  - opencode-runtime
+models:
+  - plugin-runtime
+expected_memory_titles:
+  - Provider runtime seeded lesson
+tags:
+  - provider
+  - runtime
+  - opencode

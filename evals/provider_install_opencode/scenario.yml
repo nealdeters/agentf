@@ -1,0 +1,20 @@
+name: provider_install_opencode
+description: Installs opencode manifests and proves provider-facing artifacts are written before a CLI check.
+execution_mode: provider
+provider: opencode
+provider_scope: local
+provider_install_deps: false
+prompt_format: json
+timeout_seconds: 30
+install_agents:
+  - planner
+install_commands:
+  - debugger
+providers:
+  - opencode
+models:
+  - manifest-install-mcp
+tags:
+  - provider
+  - install
+  - opencode

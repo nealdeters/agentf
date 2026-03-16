@@ -1,0 +1,1 @@
+{"id":"eval-success-1","description":"Implement eval harness support","task":"Validate engineer success persistence","language":"ruby","success":true}

@@ -623,7 +623,7 @@ module Agentf
           cursor, batch = @client.scan(cursor, match: "episodic:*", count: 100)
           batch.each do |key|
             memory = load_episode(key)
-            memories << memory if memory
+            memories << memory if memory && memory["project"].to_s == @project.to_s
           end
           break if cursor == "0"
         end
@@ -901,32 +901,12 @@ module Agentf
         base
       end
 
-      # Determine whether writes from the given agent should require explicit
-      # confirmation. We consider agents that declare "ask_first" policy
-      # boundaries to be conservative and require confirmation before persisting
-      # memories. Agent classes register policy boundaries on their class
-      # definitions (see agents/*). When agent is provided as a role string
-      # (eg. "ENGINEER") we try to match against known agent classes.
-      def agent_requires_confirmation?(agent)
-        begin
-          # If a developer passed an agent class-like string, try to map it to
-          # the loaded agent class and inspect its policy_boundaries.
-          candidate = Agentf::Agents.constants
-                      .map { |c| Agentf::Agents.const_get(c) }
-                      .find do |klass|
-                        klass.is_a?(Class) && klass.respond_to?(:policy_boundaries) && klass.typed_name == agent
-                      end
-
-          return false unless candidate
-
-          boundaries = candidate.policy_boundaries
-          persist_pattern = /persist|store|save/i
-          ask_matches = Array(boundaries["ask_first"]).select { |s| s =~ persist_pattern } rescue []
-          !ask_matches.empty?
-        rescue StandardError
-          false
-        end
-      end
+      # NOTE: previous implementations exposed an `agent_requires_confirmation?`
+      # helper here. That functionality is superseded by
+      # `persistence_preference_for(agent)` which returns explicit preferences
+      # (:always, :ask_first, :never) and is used by callers to decide whether
+      # interactive confirmation is required. Keep this file lean and avoid
+      # duplicate helpers.
 
       # Inspect loaded agent classes for explicit persistence preference.
       # Returns one of: :always, :ask_first, :never, or nil when unknown.

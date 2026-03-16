@@ -88,6 +88,9 @@ require_relative "agentf/commands"
 require_relative "agentf/commands/registry"
 require_relative "agentf/service/providers"
 require_relative "agentf/context_builder"
+require_relative "agentf/evals/scenario"
+require_relative "agentf/evals/runner"
+require_relative "agentf/evals/report"
 # Profiles previously lived in lib/agentf/packs.rb; the profile data is now
 # embedded in the orchestrator (WorkflowEngine::PROFILES). The old file was
 # removed as part of simplifying the profile surface.

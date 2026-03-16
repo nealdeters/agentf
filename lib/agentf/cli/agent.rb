@@ -26,7 +26,8 @@ module Agentf
         # request machine-readable output. Strip it here so it's not treated as
         # part of the agent payload.
         args = args.dup
-        args.delete("--json")
+        json_output = !args.delete("--json").nil?
+        confirmed_write = parse_single_option(args, "--confirmed-write=")
 
         agent_name = args.shift
         payload = args.join(" ")
@@ -63,14 +64,28 @@ module Agentf
           parsed = payload
         end
 
-        result = agent.execute(task: parsed || payload, context: {}, agents: agents, commands: registry, logger: method(:puts))
+        previous = ENV["AGENTF_SUPPRESS_AGENT_LOGS"]
+        previous_auto_confirm = ENV["AGENTF_AUTO_CONFIRM_MEMORIES"]
+        ENV["AGENTF_SUPPRESS_AGENT_LOGS"] = "true" if json_output
+        ENV["AGENTF_AUTO_CONFIRM_MEMORIES"] = "true" unless confirmed_write.to_s.empty?
+
+        result = agent.execute(
+          task: parsed || payload,
+          context: { "confirmed_write" => confirmed_write },
+          agents: agents,
+          commands: registry,
+          logger: json_output ? nil : method(:puts)
+        )
 
         puts JSON.generate(result)
+      ensure
+        ENV["AGENTF_SUPPRESS_AGENT_LOGS"] = previous if json_output
+        ENV["AGENTF_AUTO_CONFIRM_MEMORIES"] = previous_auto_confirm unless confirmed_write.to_s.empty?
       end
 
       def show_help
         puts <<~HELP
-          Usage: agentf agent <AGENT_NAME> [payload]
+          Usage: agentf agent <AGENT_NAME> [payload] [--json] [--confirmed-write=<token>]
 
           Runs a single agent and prints JSON result.
         HELP

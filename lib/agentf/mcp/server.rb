@@ -3,17 +3,9 @@
 begin
   require "mcp"
 rescue LoadError
-  require_relative "stub"
-else
-  # If the installed `mcp` gem is present but does not expose the simple
-  # Server DSL our code expects (notably the `tool` helper), prefer the
-  # bundled stub implementation so tests and the stdio server behave
-  # consistently in CI and developer machines.
-  if defined?(::MCP::Server) && !::MCP::Server.instance_methods.include?(:tool)
-    require_relative "stub"
-  end
 end
 require "json"
+require "set"
 
 module Agentf
   module MCP
@@ -28,6 +20,161 @@ module Agentf
     #   AGENTF_MCP_ALLOW_WRITES   - true/false, controls memory write tools
     #   AGENTF_MCP_MAX_ARG_LENGTH - max length per string argument
     class Server
+      ToolDefinition = Struct.new(:name, :description, :arguments, :handler, keyword_init: true)
+
+      class ToolBuilder
+        attr_reader :arguments, :handler
+
+        def initialize(name)
+          @name = name
+          @arguments = {}
+        end
+
+        def description(value = nil)
+          @description = value unless value.nil?
+          @description
+        end
+
+        def argument(name, type, required: false, description:, items: nil, **_opts)
+          @arguments[name] = {
+            type: type,
+            items: items,
+            required: required,
+            schema: {
+              type: schema_type(type),
+              description: description
+            }.tap do |schema|
+              schema[:items] = { type: schema_type(items) } if type == Array && items
+            end
+          }
+        end
+
+        def call(&block)
+          @handler = block
+        end
+
+        private
+
+        def schema_type(type)
+          case type&.name
+          when "String" then "string"
+          when "Integer" then "integer"
+          when "Float" then "number"
+          when "TrueClass", "FalseClass" then "boolean"
+          when "Array" then "array"
+          when "Hash" then "object"
+          else
+            "string"
+          end
+        end
+      end
+
+      class RegistryAdapter
+        def initialize(name:, version:)
+          @name = name
+          @version = version
+          @tools = {}
+        end
+
+        def tool(name, &block)
+          builder = ToolBuilder.new(name)
+          builder.instance_eval(&block)
+          @tools[name] = ToolDefinition.new(
+            name: name,
+            description: builder.description,
+            arguments: builder.arguments,
+            handler: builder.handler
+          )
+        end
+
+        def list_tools
+          @tools.values.map do |tool|
+            {
+              name: tool.name,
+              description: tool.description.to_s,
+              inputSchema: {
+                type: "object",
+                properties: tool.arguments.transform_values { |arg| arg[:schema] },
+                required: tool.arguments.select { |_k, arg| arg[:required] }.keys.map(&:to_s)
+              }
+            }
+          end
+        end
+
+        def call_tool(name, **args)
+          tool = @tools[name]
+          raise "Unknown tool: #{name}" unless tool
+
+          tool.handler.call(args)
+        rescue StandardError => e
+          e.message
+        end
+
+        def run
+          runtime_server = build_runtime_server
+          transport = ::MCP::Server::Transports::StdioTransport.new(runtime_server)
+          runtime_server.transport = transport if runtime_server.respond_to?(:transport=)
+          transport.open
+        end
+
+        private
+
+        def build_runtime_server
+          ensure_runtime_support!
+
+          runtime_server = ::MCP::Server.new(name: @name, version: @version)
+          adapter = self
+          @tools.each_value do |tool|
+            runtime_server.define_tool(
+              name: tool.name,
+              description: tool.description,
+              input_schema: runtime_input_schema(tool.arguments)
+            ) do |**kwargs|
+              result = tool.handler.call(kwargs)
+              adapter.send(:build_response, result)
+            rescue StandardError => e
+              ::MCP::Tool::Response.new([::MCP::Content::Text.new(e.message).to_h], error: true)
+            end
+          end
+          runtime_server
+        end
+
+        def ensure_runtime_support!
+          return if defined?(::MCP::Server::Transports::StdioTransport) && defined?(::MCP::Tool::Response) && defined?(::MCP::Content::Text)
+
+          raise "Installed MCP runtime does not support stdio server transport"
+        end
+
+        def runtime_input_schema(arguments)
+          schema = {
+            type: "object",
+            properties: arguments.transform_keys(&:to_s).transform_values { |arg| arg[:schema].transform_keys(&:to_s) }
+          }
+
+          required = arguments.select { |_k, arg| arg[:required] }.keys.map(&:to_s)
+          schema[:required] = required unless required.empty?
+          schema
+        end
+
+        def build_response(result)
+          return result if result.is_a?(::MCP::Tool::Response)
+
+          text = result.is_a?(String) ? result : JSON.generate(result)
+          structured = parse_structured_content(result)
+          ::MCP::Tool::Response.new([::MCP::Content::Text.new(text).to_h], structured_content: structured)
+        end
+
+        def parse_structured_content(result)
+          return result if result.is_a?(Hash)
+          return JSON.parse(result) if result.is_a?(String)
+          return result.as_json if result.respond_to?(:as_json)
+
+          nil
+        rescue JSON::ParserError
+          nil
+        end
+      end
+
       KNOWN_TOOLS = %w[
         agentf-code-glob
         agentf-code-grep
@@ -83,7 +230,13 @@ module Agentf
           yield
           nil
         rescue Agentf::Memory::RedisMemory::ConfirmationRequired => e
-          { "confirmation_required" => true, "confirmation_details" => e.details, "attempted" => attempted }
+          {
+            "confirmation_required" => true,
+            "confirmation_details" => e.details,
+            "attempted" => attempted,
+            "confirmed_write_token" => "confirmed",
+            "confirmation_prompt" => "Ask the user whether to save this memory. If they approve, call the same tool again after confirmation. If they decline, do not retry."
+          }
         end
       end
 
@@ -160,7 +313,7 @@ module Agentf
       # ── Server construction ─────────────────────────────────────
 
       def build_server
-        s = ::MCP::Server.new(name: "agentf", version: Agentf::VERSION)
+        s = RegistryAdapter.new(name: "agentf", version: Agentf::VERSION)
         register_code_tools(s)
         register_memory_tools(s)
         register_architecture_tools(s)
@@ -483,7 +636,13 @@ module Agentf
                 end
 
                 if res.is_a?(Hash) && res["confirmation_required"]
-                  JSON.generate(confirmation_required: true, confirmation_details: res["confirmation_details"], attempted: res["attempted"])
+                  JSON.generate(
+                    confirmation_required: true,
+                    confirmation_details: res["confirmation_details"],
+                    attempted: res["attempted"],
+                    confirmed_write_token: res["confirmed_write_token"],
+                    confirmation_prompt: res["confirmation_prompt"]
+                  )
                 else
                   JSON.generate(id: id, type: "lesson", status: "stored")
                 end
@@ -515,7 +674,13 @@ module Agentf
                 end
 
                 if res.is_a?(Hash) && res["confirmation_required"]
-                  JSON.generate(confirmation_required: true, confirmation_details: res["confirmation_details"], attempted: res["attempted"])
+                  JSON.generate(
+                    confirmation_required: true,
+                    confirmation_details: res["confirmation_details"],
+                    attempted: res["attempted"],
+                    confirmed_write_token: res["confirmed_write_token"],
+                    confirmation_prompt: res["confirmation_prompt"]
+                  )
                 else
                   JSON.generate(id: id, type: "success", status: "stored")
                 end
@@ -547,7 +712,13 @@ module Agentf
                 end
 
                 if res.is_a?(Hash) && res["confirmation_required"]
-                  JSON.generate(confirmation_required: true, confirmation_details: res["confirmation_details"], attempted: res["attempted"])
+                  JSON.generate(
+                    confirmation_required: true,
+                    confirmation_details: res["confirmation_details"],
+                    attempted: res["attempted"],
+                    confirmed_write_token: res["confirmed_write_token"],
+                    confirmation_prompt: res["confirmation_prompt"]
+                  )
                 else
                   JSON.generate(id: id, type: "pitfall", status: "stored")
                 end

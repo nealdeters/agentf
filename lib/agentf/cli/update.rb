@@ -34,7 +34,8 @@ module Agentf
           scope: "all",
           global_root: Dir.home,
           local_root: Dir.pwd,
-          force: false
+          force: false,
+          opencode_runtime: "mcp"
         }
       end
 
@@ -78,6 +79,9 @@ module Agentf
 
         local_root = parse_single_option(args, "--local-root=")
         @options[:local_root] = File.expand_path(local_root) if local_root
+
+        opencode_runtime = parse_single_option(args, "--opencode-runtime=")
+        @options[:opencode_runtime] = opencode_runtime if opencode_runtime
       end
 
       def roots_for(scope)
@@ -113,7 +117,8 @@ module Agentf
 
         installer = @installer_class.new(
           global_root: root,
-          local_root: root
+          local_root: root,
+          opencode_runtime: @options[:opencode_runtime]
         )
 
         results = installer.install(
@@ -191,12 +196,14 @@ module Agentf
             --scope=SCOPE          Update scope: global|local|all (default: all)
             --global-root=PATH     Root for global installs (default: $HOME)
             --local-root=PATH      Root for local installs (default: current directory)
+            --opencode-runtime=MODE Opencode runtime: mcp|plugin (default: mcp)
             --force                Regenerate even if version matches
 
           Examples:
             agentf update
             agentf update --force
             agentf update --provider=opencode,copilot --scope=local
+            agentf update --provider=opencode --opencode-runtime=plugin
         HELP
       end
     end

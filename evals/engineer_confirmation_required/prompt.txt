@@ -1,0 +1,1 @@
+{"id":"eval-confirm-1","description":"Attempt guarded persistence","task":"Validate confirmation handling","language":"ruby","success":true}

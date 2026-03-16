@@ -36,10 +36,13 @@ RSpec.describe Agentf::CLI::Update do
     instances = installer_instances
     klass = fake_installer_class
     Class.new(klass) do
-      define_method(:initialize) do |global_root:, local_root:|
+      define_method(:initialize) do |global_root:, local_root:, **kwargs|
         super(global_root: global_root, local_root: local_root)
+        @opencode_runtime = kwargs[:opencode_runtime]
         instances << self
       end
+
+      attr_reader :opencode_runtime
     end
   end
 
@@ -67,6 +70,7 @@ RSpec.describe Agentf::CLI::Update do
       expect(output).to include("--provider")
       expect(output).to include("--force")
       expect(output).to include("--scope")
+      expect(output).to include("--opencode-runtime")
     end
 
     it "prints help for --help flag" do
@@ -211,6 +215,23 @@ RSpec.describe Agentf::CLI::Update do
 
       expect(File.read(stamp_path).strip).to eq(Agentf::VERSION)
       expect(File.read(copilot_stamp_path).strip).to eq(Agentf::VERSION)
+    end
+  end
+
+  describe "opencode runtime selection" do
+    it "passes through the requested runtime mode"  , :aggregate_failures do
+      capture_stdout do
+        cli.run([
+          "--provider=opencode",
+          "--scope=local",
+          "--local-root=#{root}",
+          "--global-root=#{root}",
+          "--opencode-runtime=plugin"
+        ])
+      end
+
+      expect(installer_instances.size).to eq(1)
+      expect(installer_instances.first.opencode_runtime).to eq("plugin")
     end
   end
 

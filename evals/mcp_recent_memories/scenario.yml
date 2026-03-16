@@ -1,0 +1,14 @@
+name: mcp_recent_memories
+description: MCP can read back recent memories after setup seeds Redis.
+execution_mode: mcp
+mcp_tool: agentf-memory-recent
+prompt_format: json
+timeout_seconds: 30
+auto_confirm_memories: true
+providers:
+  - mcp
+models:
+  - deterministic-cli
+tags:
+  - mcp
+  - retrieval

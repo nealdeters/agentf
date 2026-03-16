@@ -68,6 +68,8 @@ module Agentf
       end
 
       def log(message)
+        return if ENV["AGENTF_SUPPRESS_AGENT_LOGS"] == "true"
+
         puts "\n[#{@name}] #{message}"
       end
 
@@ -102,7 +104,13 @@ module Agentf
         yield
       rescue Agentf::Memory::RedisMemory::ConfirmationRequired => e
         log "[MEMORY] Confirmation required: #{e.message} -- details=#{e.details.inspect}"
-        { "confirmation_required" => true, "confirmation_details" => e.details, "attempted" => attempted }
+        {
+          "confirmation_required" => true,
+          "confirmation_details" => e.details,
+          "attempted" => attempted,
+          "confirmed_write_token" => "confirmed",
+          "confirmation_prompt" => "Ask the user whether to save this memory. If they approve, rerun the same tool with confirmedWrite=confirmed. If they decline, do not retry."
+        }
       end
     end
     end

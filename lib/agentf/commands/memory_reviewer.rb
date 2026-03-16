@@ -82,6 +82,13 @@ module Agentf
         { "error" => e.message }
       end
 
+      def get_intents(limit: 10)
+        intents = @memory.get_intents(limit: limit)
+        format_memories(intents)
+      rescue => e
+        { "error" => e.message }
+      end
+
       # Get all unique tags from memories
       def get_all_tags
         tags = @memory.get_all_tags

@@ -254,6 +254,20 @@ RSpec.describe Agentf::MCP::Server do
     end
   end
 
+  describe "agentf-memory-intents" do
+    it "calls reviewer.get_intents when no kind is provided" do
+      allow(reviewer).to receive(:get_intents).with(limit: 10).and_return(
+        "count" => 1, "memories" => [{ "title" => "Reliability" }]
+      )
+
+      result = mcp.server.call_tool("agentf-memory-intents")
+      payload = JSON.parse(result)
+
+      expect(payload["count"]).to eq(1)
+      expect(payload.dig("memories", 0, "title")).to eq("Reliability")
+    end
+  end
+
   describe "agentf-memory-add-lesson" do
     it "stores a lesson via memory.store_episode"  , :aggregate_failures do
       allow(memory).to receive(:store_episode).with(
@@ -329,6 +343,25 @@ RSpec.describe Agentf::MCP::Server do
 
       expect(payload["id"]).to eq("episode_789")
       expect(payload["type"]).to eq("pitfall")
+    end
+  end
+
+  describe "agentf-memory-neighbors" do
+    it "calls reviewer.neighbors with keyword arguments" do
+      allow(reviewer).to receive(:neighbors).with("episode_1", relation: "related_to", depth: 2, limit: 3).and_return(
+        "seed_ids" => ["episode_1"], "count" => 1, "edges" => []
+      )
+
+      result = mcp.server.call_tool(
+        "agentf-memory-neighbors",
+        node_id: "episode_1",
+        relation: "related_to",
+        depth: 2,
+        limit: 3
+      )
+      payload = JSON.parse(result)
+
+      expect(payload["count"]).to eq(1)
     end
   end
 end

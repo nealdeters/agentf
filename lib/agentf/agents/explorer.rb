@@ -11,8 +11,8 @@ module Agentf
       COMMANDS = %w[glob grep read_file].freeze
       MEMORY_CONCEPTS = {
         "reads" => [],
-        "writes" => ["store_episode"],
-        "policy" => "Store exploration breadcrumbs as episodic memories."
+        "writes" => ["store_lesson"],
+        "policy" => "Store research findings as lessons after user confirmation."
       }.freeze
 
       def self.description
@@ -46,7 +46,7 @@ module Agentf
       def self.policy_boundaries
         {
           "always" => ["Return concrete file evidence"],
-          "ask_first" => ["Scanning outside configured base path", "Persisting exploration breadcrumbs to memory"],
+          "ask_first" => ["Scanning outside configured base path", "Persisting research lessons to memory"],
           "never" => ["Mutate project files during exploration"],
           "required_inputs" => [],
           "required_outputs" => ["files", "context_gathered"]
@@ -63,20 +63,27 @@ module Agentf
 
         files = @commands.glob(query, file_types: nil)
 
-        res = safe_memory_write(attempted: { action: "store_exploration", title: "Explored: #{query}", tags: ["exploration", "context"], agent: name }) do
-          memory.store_episode(
-            type: "exploration",
-            title: "Explored: #{query}",
-            description: "Found #{files.size} relevant files",
+        res = safe_memory_write(attempted: { action: "store_lesson", title: "Research finding: #{query}", tags: ["research", "exploration"], agent: name }) do
+          memory.store_lesson(
+            title: "Research finding: #{query}",
+            description: "Found #{files.size} relevant files during exploration",
             context: "Search pattern: #{file_pattern || 'all files'}",
-            tags: ["exploration", "context"],
+            tags: ["research", "exploration"],
             agent: name
           )
         end
 
         if res.is_a?(Hash) && res["confirmation_required"]
           log "Memory confirmation required during exploration: #{res['confirmation_details'].inspect}"
-          return { "files" => files, "context_gathered" => true, "confirmation_required" => true, "confirmation_details" => res["confirmation_details"], "attempted" => res["attempted"] }
+          return {
+            "files" => files,
+            "context_gathered" => true,
+            "confirmation_required" => true,
+            "confirmation_details" => res["confirmation_details"],
+            "attempted" => res["attempted"],
+            "confirmed_write_token" => res["confirmed_write_token"],
+            "confirmation_prompt" => res["confirmation_prompt"]
+          }
         end
 
         log "Found #{files.size} files"

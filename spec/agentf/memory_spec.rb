@@ -190,6 +190,21 @@ RSpec.describe Agentf::Memory::RedisMemory do
     end
   end
 
+  describe "project scoping" do
+    it "keeps recent memory queries isolated to the current project" do
+      current_project_memory = described_class.new(project: project)
+      other_project_memory = described_class.new(project: "other-project")
+
+      current_project_memory.store_lesson(title: "Current lesson", description: "current", tags: [], confirm: true)
+      other_project_memory.store_lesson(title: "Other lesson", description: "other", tags: [], confirm: true)
+
+      recent = current_project_memory.get_recent_memories(limit: 10)
+
+      expect(recent.map { |item| item["title"] }).to include("Current lesson")
+      expect(recent.map { |item| item["title"] }).not_to include("Other lesson")
+    end
+  end
+
   # Redis Stack required - skip in tests without Redis Stack
   describe "#get_pitfalls", skip: "Requires Redis Stack (FT.SEARCH)" do
   end

@@ -1,0 +1,13 @@
+name: engineer_confirmation_required
+description: Engineer returns a confirmation request instead of hanging when memory writes require approval.
+agent: engineer
+timeout_seconds: 30
+auto_confirm_memories: false
+providers:
+  - direct-agent
+models:
+  - deterministic-cli
+tags:
+  - direct-agent
+  - memory
+  - confirmation

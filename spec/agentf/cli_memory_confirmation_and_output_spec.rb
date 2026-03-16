@@ -23,6 +23,7 @@ RSpec.describe Agentf::CLI::Memory do
       parsed = JSON.parse(out)
       expect(parsed["confirmation_required"]).to be true
       expect(parsed["confirmation_details"]).to be_a(Hash)
+      expect(parsed["confirmed_write_token"]).to eq("confirmed")
     end
   end
 

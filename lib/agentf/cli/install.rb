@@ -17,6 +17,7 @@ module Agentf
           local_root: Dir.pwd,
           dry_run: false,
           install_deps: true,
+          opencode_runtime: "mcp",
           only_agents: nil,
           only_commands: nil
         }
@@ -35,6 +36,7 @@ module Agentf
           local_root: @options[:local_root],
           dry_run: @options[:dry_run],
           install_deps: @options[:install_deps],
+          opencode_runtime: @options[:opencode_runtime],
           verbose: @options.fetch(:verbose, false)
         )
 
@@ -72,6 +74,9 @@ module Agentf
         # Extract --install-deps flag
         @options[:install_deps] = !args.delete("--install-deps").nil?
 
+        opencode_runtime = parse_single_option(args, "--opencode-runtime=")
+        @options[:opencode_runtime] = opencode_runtime if opencode_runtime
+
         # Extract --global-root and --local-root
         global_root = parse_single_option(args, "--global-root=")
         @options[:global_root] = File.expand_path(global_root) if global_root
@@ -107,6 +112,7 @@ module Agentf
             --local-root=PATH      Root for local installs (default: current directory)
             --agent=LIST           Only install specific agents (comma-separated)
             --command=LIST         Only install specific commands (comma-separated)
+            --opencode-runtime=MODE Opencode runtime: mcp|plugin (default: mcp)
             --dry-run              Show planned writes without writing files
 
           Examples:
@@ -114,6 +120,7 @@ module Agentf
             agentf install --provider=opencode,copilot --scope=local
             agentf install --provider=copilot --dry-run
             agentf install --agent=architect,specialist
+            agentf install --provider=opencode --opencode-runtime=plugin
         HELP
       end
     end

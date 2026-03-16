@@ -1,0 +1,19 @@
+name: provider_install_opencode_plugin
+description: Installs the legacy opencode plugin runtime as an explicit fallback path.
+execution_mode: provider
+provider: opencode
+provider_scope: local
+provider_install_deps: false
+prompt_format: json
+timeout_seconds: 30
+env:
+  AGENTF_EVAL_OPENCODE_RUNTIME: plugin
+providers:
+  - opencode-plugin
+models:
+  - manifest-install-plugin
+tags:
+  - provider
+  - install
+  - opencode
+  - legacy-plugin

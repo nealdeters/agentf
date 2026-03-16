@@ -1,0 +1,13 @@
+name: planner_reads_seeded_pitfall
+description: Planner surfaces a seeded pitfall from Redis in its planning context.
+agent: planner
+timeout_seconds: 30
+auto_confirm_memories: true
+providers:
+  - direct-agent
+models:
+  - deterministic-cli
+tags:
+  - direct-agent
+  - memory
+  - retrieval

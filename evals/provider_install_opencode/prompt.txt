@@ -1,0 +1,1 @@
+{"command":["memory","recent","-n","1","--json"]}

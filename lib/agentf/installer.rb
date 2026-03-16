@@ -46,12 +46,13 @@ module Agentf
       }
     }.freeze
 
-    def initialize(global_root: Dir.home, local_root: Dir.pwd, dry_run: false, verbose: false, install_deps: true)
+    def initialize(global_root: Dir.home, local_root: Dir.pwd, dry_run: false, verbose: false, install_deps: true, opencode_runtime: "mcp")
       @global_root = global_root
       @local_root = local_root
       @dry_run = dry_run
       @verbose = verbose
       @install_deps = install_deps
+      @opencode_runtime = opencode_runtime.to_s
     end
 
     def install(
@@ -86,7 +87,7 @@ module Agentf
       end
 
       # Optionally install dependencies for opencode helper package.json
-      if provider.to_s == "opencode" && @install_deps
+      if provider.to_s == "opencode" && @install_deps && opencode_plugin_runtime?
         roots.each do |root|
           package_json_path = File.join(root, ".opencode/package.json")
           if @dry_run
@@ -172,25 +173,30 @@ module Agentf
         render_workflow_engine_manifest
       )
       writes << write_manifest(
-        File.join(root, ".opencode/plugins/opencode-plugin.d.ts"),
-        render_opencode_plugin
-      )
-      writes << write_manifest(
-        File.join(root, ".opencode/plugins/agentf-plugin.ts"),
-        render_agentf_plugin
-      )
-      # Backwards-compatible helper: expose individual tool wrappers
-      writes << write_manifest(
-        File.join(root, ".opencode/tsconfig.json"),
-        render_opencode_tsconfig
-      )
-      writes << write_package_json(root)
-      writes << write_manifest(
         File.join(root, ".opencode/memory/agentf-redis-schema.md"),
         render_opencode_memory_schema
       )
       writes << write_opencode_json(root)
+      if opencode_plugin_runtime?
+        writes << write_manifest(
+          File.join(root, ".opencode/plugins/opencode-plugin.d.ts"),
+          render_opencode_plugin
+        )
+        writes << write_manifest(
+          File.join(root, ".opencode/plugins/agentf-plugin.ts"),
+          render_agentf_plugin
+        )
+        writes << write_manifest(
+          File.join(root, ".opencode/tsconfig.json"),
+          render_opencode_tsconfig
+        )
+        writes << write_package_json(root)
+      end
       writes
+    end
+
+    def opencode_plugin_runtime?
+      @opencode_runtime == "plugin"
     end
 
     def discover_agents
@@ -257,6 +263,10 @@ module Agentf
         IMPORTANT: Use the `#{tool_name}` tool for any filesystem, codebase, or memory actions.
         The manifest contains only routing and a small policy summary — the tool is the
         authoritative implementation.
+
+        If the tool returns `confirmation_required: true`, ask the user whether to continue.
+        If they approve, rerun the same tool with `confirmedWrite=confirmed`. If they decline,
+        do not retry the write.
 
         Policy Summary: #{policy_summary}
 
@@ -913,7 +923,7 @@ module Agentf
               const agentName = toolName.replace(/^agentf-/, "");
 
               agentTools[toolName] = tool({
-                description: `Invoke agent ${agentName} via the agentf CLI`,
+                description: `Invoke agent ${agentName} via the agentf CLI. If the result includes confirmation_required=true, ask the user before retrying with confirmedWrite=confirmed.`,
                 args: {
                   input: tool.schema.string().optional().describe("Optional input prompt or payload"),
                   confirmedWrite: tool.schema.string().optional().describe("Continuation token for confirmed writes"),
@@ -947,18 +957,37 @@ module Agentf
       TYPESCRIPT
     end
 
-    def render_opencode_json
-      <<~JSON
-        {
-          "$schema": "https://opencode.ai/config.json",
-          "plugin": ["./.opencode/plugins/agentf-plugin"]
+    def render_opencode_json(root)
+      JSON.pretty_generate(opencode_json_config(root))
+    end
+
+    def opencode_json_config(root)
+      base = {
+        "$schema" => "https://opencode.ai/config.json"
+      }
+
+      if opencode_plugin_runtime?
+        base["plugin"] = ["./.opencode/plugins/agentf-plugin"]
+      else
+        base["mcp"] = {
+          "agentf" => {
+            "type" => "local",
+            "enabled" => true,
+            "command" => opencode_mcp_command(root)
+          }
         }
-      JSON
+      end
+
+      base
+    end
+
+    def opencode_mcp_command(root)
+      [File.join(root, "bin", "agentf"), "mcp-server"]
     end
 
     def write_opencode_json(root)
       path = File.join(root, "opencode.json")
-      new_content = JSON.parse(render_opencode_json)
+      new_content = JSON.parse(render_opencode_json(root))
 
       return write_manifest(path, JSON.pretty_generate(new_content)) unless File.exist?(path)
 
@@ -970,8 +999,22 @@ module Agentf
       end
 
       merged = existing.dup
-      merged_plugins = Array(existing["plugin"]) + Array(new_content["plugin"])
-      merged["plugin"] = merged_plugins.uniq
+
+      if new_content["plugin"]
+        merged_plugins = Array(existing["plugin"]) + Array(new_content["plugin"])
+        merged["plugin"] = merged_plugins.uniq
+      elsif existing["plugin"]
+        filtered_plugins = Array(existing["plugin"]).reject { |entry| entry == "./.opencode/plugins/agentf-plugin" }
+        if filtered_plugins.empty?
+          merged.delete("plugin")
+        else
+          merged["plugin"] = filtered_plugins
+        end
+      end
+
+      if new_content["mcp"]
+        merged["mcp"] = (existing["mcp"] || {}).merge(new_content["mcp"])
+      end
 
       write_manifest(path, JSON.pretty_generate(merged))
     end

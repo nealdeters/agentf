@@ -25,4 +25,22 @@ RSpec.describe Agentf::MCP::Server do
       expect(s.guardrails[:allow_writes]).to be false
     end
   end
+
+  describe "runtime adapter" do
+    it "can build a runtime-capable registry adapter even without the old DSL" do
+      expect(mcp.server).to respond_to(:list_tools)
+      expect(mcp.server).to respond_to(:run)
+      expect(mcp.server.list_tools).not_to be_empty
+    end
+
+    it "builds runtime MCP responses with structured text hashes" do
+      adapter = mcp.server
+      runtime_server = adapter.send(:build_runtime_server)
+      response = runtime_server.send(:call_tool, { name: "agentf-memory-recent", arguments: { limit: 1 } })
+
+      expect(response[:content]).to be_an(Array)
+      expect(response[:content].first).to be_a(Hash)
+      expect(response[:content].first[:type]).to eq("text")
+    end
+  end
 end

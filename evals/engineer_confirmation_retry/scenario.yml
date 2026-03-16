@@ -1,0 +1,17 @@
+name: engineer_confirmation_retry
+description: Engineer retries after confirmation and persists the success memory.
+execution_mode: agent
+agent: engineer
+timeout_seconds: 30
+auto_confirm_memories: false
+retry_on_confirmation: true
+confirmed_write_token: retry-approved
+providers:
+  - direct-agent
+models:
+  - deterministic-cli
+tags:
+  - direct-agent
+  - retry
+  - confirmation
+  - memory

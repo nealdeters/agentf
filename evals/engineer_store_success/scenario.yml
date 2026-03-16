@@ -1,0 +1,13 @@
+name: engineer_store_success
+description: Engineer writes a success memory that can be verified via the CLI.
+agent: engineer
+timeout_seconds: 30
+auto_confirm_memories: true
+providers:
+  - direct-agent
+models:
+  - deterministic-cli
+tags:
+  - direct-agent
+  - memory
+  - success

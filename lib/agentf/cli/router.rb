@@ -7,6 +7,7 @@ require_relative "install"
 require_relative "update"
 require_relative "metrics"
 require_relative "architecture"
+require_relative "eval"
 
 module Agentf
   module CLI
@@ -19,7 +20,7 @@ module Agentf
     #   agentf version
     #   agentf help
       class Router
-        SUBCOMMANDS = %w[memory code metrics architecture install update mcp-server version help].freeze
+        SUBCOMMANDS = %w[memory code metrics architecture install update eval agent mcp-server version help].freeze
 
       def run(args)
         subcommand = args.shift || "help"
@@ -42,6 +43,8 @@ module Agentf
           Architecture.new.run(args)
         when "update"
           Update.new.run(args)
+        when "eval"
+          Eval.new.run(args)
         when "mcp-server"
           start_mcp_server
         when "agent"
@@ -78,6 +81,8 @@ module Agentf
             architecture Analyze architecture layers and violations
             install      Generate provider manifests (agents, commands, tools)
             update       Regenerate manifests when gem version changes
+            eval         Run black-box eval scenarios against `agentf agent`
+            agent        Run a single agent directly
             mcp-server   Start MCP server over stdio (for Copilot integration)
             version      Show version
 
@@ -104,6 +109,9 @@ module Agentf
             agentf metrics parity --json
             agentf architecture analyze
             agentf architecture review --json
+            agentf eval list
+            agentf eval run all --json
+            agentf agent planner "Plan a refactor" --json
             agentf update
             agentf update --force --provider=opencode,copilot
             agentf mcp-server

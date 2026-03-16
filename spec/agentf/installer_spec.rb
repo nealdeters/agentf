@@ -57,7 +57,7 @@ RSpec.describe Agentf::Installer do
       expect(File.read(command_manifest)).to include("This is a thin command manifest")
     end
 
-    it "bootstraps opencode helper directories and files"  , :aggregate_failures do
+    it "bootstraps opencode mcp-first helper files by default"  , :aggregate_failures do
       installer = described_class.new(global_root: global_root, local_root: local_root)
 
       installer.install(
@@ -68,36 +68,30 @@ RSpec.describe Agentf::Installer do
       )
 
       workflow_agent = File.join(local_root, ".opencode/agents/agentf-orchestrator.md")
-      plugin = File.join(local_root, ".opencode/plugins/agentf-plugin.ts")
       memory_schema = File.join(local_root, ".opencode/memory/agentf-redis-schema.md")
       opencode_json = File.join(local_root, "opencode.json")
 
       expect(File).to exist(workflow_agent)
-      expect(File).to exist(plugin)
       expect(File).to exist(memory_schema)
       expect(File).to exist(opencode_json)
       expect(File.read(workflow_agent)).to include("# AGENTF-WORKFLOW-ENGINE Agent")
-      plugin_content = File.read(plugin)
-      expect(plugin_content).to include("export const agentfPlugin")
-      expect(plugin_content).to include("export default agentfPlugin")
-      expect(plugin_content).to include("tools:")
-      expect(plugin_content).to include("AGENTF_GEM_PATH")
-      expect(plugin_content).to include("ensureAgentfPreflight")
-      expect(plugin_content).to include("agentf version")
-      expect(plugin_content).to include("Agentf plugin preflight failed")
-      expect(plugin_content).to include("rbenv/asdf/mise")
-      expect(plugin_content).not_to include('execFileAsync("bundle"')
-      expect(plugin_content).not_to include('["exec", "ruby"')
       expect(File.read(memory_schema)).to include("# Redis Memory Schema")
-      expect(File.read(opencode_json)).to include('"plugin"')
-      expect(File.read(opencode_json)).to include("agentf-plugin")
+      opencode_config = JSON.parse(File.read(opencode_json))
+      expect(opencode_config).to include("mcp")
+      expect(opencode_config.dig("mcp", "agentf", "type")).to eq("local")
+      expect(opencode_config.dig("mcp", "agentf", "command")).to eq([File.join(local_root, "bin", "agentf"), "mcp-server"])
+      expect(File).not_to exist(File.join(local_root, ".opencode/plugins/agentf-plugin.ts"))
     end
 
-    it "merges opencode.json plugin entries instead of overwriting"  , :aggregate_failures do
-      # create an existing opencode.json with a different plugin
+    it "merges opencode.json mcp entries instead of overwriting"  , :aggregate_failures do
       existing = {
         "$schema" => "https://opencode.ai/config.json",
-        "plugin" => ["./.opencode/plugins/other-plugin"]
+        "mcp" => {
+          "other" => {
+            "type" => "remote",
+            "url" => "https://example.test/mcp"
+          }
+        }
       }
       File.write(File.join(local_root, "opencode.json"), JSON.pretty_generate(existing))
 
@@ -105,17 +99,55 @@ RSpec.describe Agentf::Installer do
       installer.install(providers: ["opencode"], scope: "local", only_agents: ["planner"], only_commands: ["debugger"])
 
       merged = JSON.parse(File.read(File.join(local_root, "opencode.json")))
-      expect(merged["plugin"]).to include("./.opencode/plugins/other-plugin")
-      expect(merged["plugin"]).to include("./.opencode/plugins/agentf-plugin")
-      expect(merged["plugin"].length).to eq(2)
+      expect(merged.dig("mcp", "other", "url")).to eq("https://example.test/mcp")
+      expect(merged.dig("mcp", "agentf", "command")).to eq([File.join(local_root, "bin", "agentf"), "mcp-server"])
     end
 
-    it "can install deps when install_deps is true (skips if no package.json)" do
-      installer = described_class.new(global_root: global_root, local_root: local_root, install_deps: true)
+    it "removes the legacy agentf plugin entry when switching to mcp mode"  , :aggregate_failures do
+      existing = {
+        "$schema" => "https://opencode.ai/config.json",
+        "plugin" => [
+          "./.opencode/plugins/agentf-plugin",
+          "./.opencode/plugins/other-plugin"
+        ]
+      }
+      File.write(File.join(local_root, "opencode.json"), JSON.pretty_generate(existing))
 
-      # No .opencode/package.json exists, should skip gracefully
-      results = installer.install(providers: ["opencode"], scope: "local")
-      expect(results).to satisfy { |arr| arr.any? { |r| r["status"] == "skipped" || r["status"] == "no_manager_found" || r["status"] == "installed" } }
+      installer = described_class.new(global_root: global_root, local_root: local_root, opencode_runtime: "mcp")
+      installer.install(providers: ["opencode"], scope: "local", only_agents: ["planner"], only_commands: ["debugger"])
+
+      merged = JSON.parse(File.read(File.join(local_root, "opencode.json")))
+      expect(merged.fetch("plugin")).to eq(["./.opencode/plugins/other-plugin"])
+      expect(merged.dig("mcp", "agentf", "command")).to eq([File.join(local_root, "bin", "agentf"), "mcp-server"])
+    end
+
+    it "can still install the legacy opencode plugin runtime when requested"  , :aggregate_failures do
+      installer = described_class.new(global_root: global_root, local_root: local_root, opencode_runtime: "plugin")
+
+      installer.install(
+        providers: ["opencode"],
+        scope: "local",
+        only_agents: ["planner"],
+        only_commands: ["debugger"]
+      )
+
+      plugin = File.join(local_root, ".opencode/plugins/agentf-plugin.ts")
+      opencode_json = JSON.parse(File.read(File.join(local_root, "opencode.json")))
+
+      expect(File).to exist(plugin)
+      expect(opencode_json["plugin"]).to include("./.opencode/plugins/agentf-plugin")
+    end
+
+    it "only installs opencode deps in legacy plugin mode"  , :aggregate_failures do
+      default_installer = described_class.new(global_root: global_root, local_root: local_root, install_deps: true)
+      default_results = default_installer.install(providers: ["opencode"], scope: "local")
+
+      expect(default_results).not_to satisfy { |arr| arr.any? { |r| r["status"] == "skipped" || r["status"] == "no_manager_found" || r["status"] == "installed" } }
+
+      plugin_installer = described_class.new(global_root: global_root, local_root: local_root, install_deps: true, opencode_runtime: "plugin")
+      plugin_results = plugin_installer.install(providers: ["opencode"], scope: "local")
+
+      expect(plugin_results).to satisfy { |arr| arr.any? { |r| r["status"] == "skipped" || r["status"] == "no_manager_found" || r["status"] == "installed" } }
     end
 
     it "supports dry-run mode without writing files"  , :aggregate_failures do
@@ -131,7 +163,6 @@ RSpec.describe Agentf::Installer do
       expect(results).to all(include("status" => "planned"))
       expect(File).not_to exist(File.join(local_root, ".opencode/agents/agentf-planner.md"))
       expect(File).not_to exist(File.join(local_root, ".opencode/agents/agentf-orchestrator.md"))
-      expect(File).not_to exist(File.join(local_root, ".opencode/plugins/agentf-plugin.ts"))
       expect(File).not_to exist(File.join(local_root, ".opencode/memory/agentf-redis-schema.md"))
       expect(File).not_to exist(File.join(local_root, "opencode.json"))
     end

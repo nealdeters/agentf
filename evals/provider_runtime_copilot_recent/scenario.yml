@@ -1,0 +1,23 @@
+name: provider_runtime_copilot_recent
+description: Executes the copilot-facing MCP runtime path against seeded Redis memory.
+execution_mode: provider_runtime
+provider: copilot
+provider_runtime_tool: agentf-memory-recent
+provider_scope: local
+provider_install_deps: false
+prompt_format: json
+timeout_seconds: 30
+install_agents:
+  - planner
+install_commands:
+  - memory
+providers:
+  - copilot-runtime
+models:
+  - mcp-runtime
+expected_memory_titles:
+  - Copilot runtime seeded lesson
+tags:
+  - provider
+  - runtime
+  - copilot
