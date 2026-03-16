@@ -18,8 +18,8 @@ module Agentf
     #   agentf install --provider opencode,copilot
     #   agentf version
     #   agentf help
-    class Router
-      SUBCOMMANDS = %w[memory code metrics architecture install update mcp-server version help].freeze
+      class Router
+        SUBCOMMANDS = %w[memory code metrics architecture install update mcp-server version help].freeze
 
       def run(args)
         subcommand = args.shift || "help"
@@ -44,6 +44,10 @@ module Agentf
           Update.new.run(args)
         when "mcp-server"
           start_mcp_server
+        when "agent"
+          # agent <AGENT_NAME> [payload]
+          require_relative "agent"
+          Agent.new.run(args)
         when "version", "--version", "-v"
           puts "agentf #{Agentf::VERSION}"
         when "help", "--help", "-h"

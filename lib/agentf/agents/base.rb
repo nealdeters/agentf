@@ -52,14 +52,20 @@ module Agentf
         }
       end
 
-    def initialize(memory)
-      @memory = memory
-      @name = self.class.typed_name
-      @execution_contract = Agentf::AgentExecutionContract.new(
-        enabled: Agentf.config.agent_contract_enabled,
-        mode: Agentf.config.agent_contract_mode
-      )
-    end
+      def initialize(memory)
+        @memory = memory
+        @name = self.class.typed_name
+        @execution_contract = Agentf::AgentExecutionContract.new(
+          enabled: Agentf.config.agent_contract_enabled,
+          mode: Agentf.config.agent_contract_mode
+        )
+      end
+
+      # Unified execution entrypoint for all agents. Concrete agents must
+      # implement `execute(task:, context:, agents:, commands:, logger:)`.
+      def execute(task:, context: {}, agents: {}, commands: {}, logger: nil)
+        raise NotImplementedError, "#{self.class} must implement #execute"
+      end
 
       def log(message)
         puts "\n[#{@name}] #{message}"

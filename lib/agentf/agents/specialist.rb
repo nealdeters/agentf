@@ -52,7 +52,9 @@ module Agentf
         }
       end
 
-      def execute(subtask)
+      def execute(task:, context: {}, agents: {}, commands: {}, logger: nil)
+        subtask = task.is_a?(Hash) ? task : (context["current_subtask"] || { "description" => task })
+
         normalized_subtask = subtask.merge(
           "id" => subtask["id"] || "ad-hoc",
           "description" => subtask["description"] || "Execute implementation step"

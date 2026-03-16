@@ -108,6 +108,11 @@ module Agentf
           }
         end
       end
+
+      def execute(task:, context: {}, agents: {}, commands: {}, logger: nil)
+        error_text = task.is_a?(String) ? task : context["error"]
+        diagnose(error_text, context: context)
+      end
     end
   end
 end

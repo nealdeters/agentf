@@ -31,7 +31,7 @@ puts "Plan: #{plan['subtasks'].size} subtasks created"
 
 plan["subtasks"].each do |subtask|
   subtask["task"] = "Build user authentication system"
-  result = specialist.execute(subtask)
+  result = specialist.execute(task: subtask)
   review = reviewer.review(result)
   puts "  Subtask #{subtask['id']}: #{review['approved'] ? 'Approved' : 'Issues found'}"
 end
@@ -55,10 +55,8 @@ puts "Parsed error: #{analysis.error_type}"
 puts "\n--- Example 3: Provider-Adapted Workflow ---"
 
 engine = Agentf::WorkflowEngine.new(memory: memory, provider: :opencode)
-result = engine.execute(
-  "Create a login form component",
-  context: { "design_spec" => "Login form with email and password fields" }
-)
+  result = engine.execute(task: "Create a login form component",
+    context: { "design_spec" => "Login form with email and password fields" })
 
 puts "\nWorkflow completed!"
 puts "Provider: #{result['provider']}"

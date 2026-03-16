@@ -61,7 +61,7 @@ RSpec.describe Agentf::Agents::Specialist do
       subtask = { "id" => 1, "description" => "Implement feature" }
 
       expect(memory).to receive(:store_success)
-      result = specialist.execute(subtask)
+      result = specialist.execute(task: subtask)
 
       expect(result["success"]).to be true
       expect(result["subtask_id"]).to eq(1)
@@ -78,7 +78,7 @@ RSpec.describe Agentf::Agents::Specialist do
         agent: "ENGINEER"
       )
 
-      specialist.execute(subtask)
+      specialist.execute(task: subtask)
     end
 
     it "stores pitfall on failure" do
@@ -87,7 +87,7 @@ RSpec.describe Agentf::Agents::Specialist do
 
       # We'll simulate by allowing it to not call store_success
       allow(memory).to receive(:store_success)
-      result = specialist.execute(subtask)
+      result = specialist.execute(task: subtask)
 
       expect(result["success"]).to be true
     end

@@ -10,7 +10,7 @@ RSpec.describe Agentf::Agents::Specialist do
     confirmation = Agentf::Memory::RedisMemory::ConfirmationRequired.new("confirm", { reason: "ask_first" })
     allow(memory).to receive(:store_success).and_raise(confirmation)
 
-    res = agent.execute({ "id" => "1", "description" => "Run job", "success" => true })
+    res = agent.execute(task: { "id" => "1", "description" => "Run job", "success" => true })
     expect(res["confirmation_required"]).to be(true)
     expect(res["confirmation_details"]).to eq(confirmation.details)
   end
@@ -19,7 +19,7 @@ RSpec.describe Agentf::Agents::Specialist do
     confirmation = Agentf::Memory::RedisMemory::ConfirmationRequired.new("confirm", { reason: "ask_first" })
     allow(memory).to receive(:store_pitfall).and_raise(confirmation)
 
-    res = agent.execute({ "id" => "2", "description" => "Do bad", "success" => false })
+    res = agent.execute(task: { "id" => "2", "description" => "Do bad", "success" => false })
     expect(res["confirmation_required"]).to be(true)
     expect(res["confirmation_details"]).to eq(confirmation.details)
   end

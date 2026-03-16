@@ -77,6 +77,11 @@ module Agentf
           { "approved" => approved, "issues" => issues }
         end
       end
+
+      def execute(task:, context: {}, agents: {}, commands: {}, logger: nil)
+        subtask = task.is_a?(Hash) ? task : context["execution"] || {}
+        review(subtask)
+      end
     end
   end
 end

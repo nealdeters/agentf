@@ -85,6 +85,7 @@ end
 require_relative "agentf/memory"
 require_relative "agentf/tools"
 require_relative "agentf/commands"
+require_relative "agentf/commands/registry"
 require_relative "agentf/service/providers"
 require_relative "agentf/context_builder"
 # Profiles previously lived in lib/agentf/packs.rb; the profile data is now

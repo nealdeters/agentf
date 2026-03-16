@@ -100,7 +100,9 @@ module Agentf
       @workflow_state = {}
     end
 
-    def execute(task, context: nil)
+    # Unified execute entrypoint for the workflow engine. Accepts keyword
+    # `task:` for consistency with agent `execute` contracts.
+    def execute(task:, context: nil)
       log "=" * 60
       log "EXECUTING #{provider.name} WORKFLOW"
       log "=" * 60

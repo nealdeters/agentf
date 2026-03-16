@@ -97,6 +97,38 @@ module Agentf
 
         { "test_file" => test_file, "passed" => result["passed"] }
       end
+
+      def execute(task:, context: {}, agents: {}, commands: {}, logger: nil)
+         # Support provider-driven TDD red-phase: when context signals a red phase,
+         # generate tests via the tester commands (if provided) and return a
+         # simulated failing test signature so orchestrator flows can short-circuit.
+         if context.to_h["tdd_phase"] == "red"
+           tester_commands = if commands.respond_to?(:fetch)
+                               commands.fetch("tester", nil)
+                             else
+                               commands["tester"]
+                             end
+
+           begin
+             tester_commands&.generate_unit_tests(context.to_h["source_file"]) if tester_commands&.respond_to?(:generate_unit_tests)
+           rescue StandardError
+             # ignore command errors for the simulated red phase
+           end
+
+           return { "tdd_phase" => "red", "passed" => false, "failure_signature" => "expected-failure-#{context.to_h["source_file"] || 'unspecified'}" }
+         end
+
+         action = context["action"] || (task.is_a?(String) ? "generate_tests" : context["action"])
+        case action
+        when "generate_tests"
+          code_file = task.is_a?(String) ? task : context["code_file"]
+          generate_tests(code_file, test_type: context["test_type"] || "unit")
+        when "run_tests"
+          run_tests(context["test_file"] || task)
+        else
+          { "error" => "Unknown action for Tester: #{action}" }
+        end
+      end
     end
   end
 end

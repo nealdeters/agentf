@@ -69,6 +69,12 @@ module Agentf
           "total_memories" => memories.size
         }
       end
+
+      def execute(task:, context: {}, agents: {}, commands: {}, logger: nil)
+        project = task.is_a?(String) ? task : (context["project_name"] || "project")
+        sync_docs(project)
+      end
+
     end
   end
 end

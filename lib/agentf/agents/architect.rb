@@ -78,6 +78,10 @@ module Agentf
 
         { "subtasks" => subtasks, "context" => context }
       end
+
+      def execute(task:, context: {}, agents: {}, commands: {}, logger: nil)
+        plan_task(task)
+      end
     end
   end
 end

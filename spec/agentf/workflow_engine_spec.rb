@@ -48,7 +48,7 @@ RSpec.describe Agentf::WorkflowEngine do
       engine = described_class.new(memory: memory, base_path: base_path, provider: :opencode)
 
       expect(memory).to receive(:store_feature_intent)
-      result = engine.execute("Add feature")
+      result = engine.execute(task: "Add feature")
 
       expect(result).to have_key("provider")
       expect(result["provider"]).to eq("OPENCODE")
@@ -60,14 +60,14 @@ RSpec.describe Agentf::WorkflowEngine do
       engine = described_class.new(memory: memory, base_path: base_path, provider: :copilot)
       context = { "design_spec" => "Button component" }
 
-      result = engine.execute("Create button", context: context)
+      result = engine.execute(task: "Create button", context: context)
       expect(result["pack"]).to eq("generic")
       expect(result["context"]).to eq(context)
     end
 
     it "resolves rails pack from context" do
       engine = described_class.new(memory: memory, base_path: base_path, provider: :opencode)
-      result = engine.execute("Build rails feature", context: { "stack" => "rails" })
+      result = engine.execute(task: "Build rails feature", context: { "stack" => "rails" })
       expect(result["pack"]).to eq("rails_standard")
     end
 
@@ -77,7 +77,7 @@ RSpec.describe Agentf::WorkflowEngine do
       engine.instance_variable_set(:@metrics_commands, metrics_commands)
 
       expect(metrics_commands).to receive(:record_workflow).with(hash_including("provider" => "OPENCODE"))
-      engine.execute("Add feature")
+      engine.execute(task: "Add feature")
     end
 
     it "records memory confirmation events when persistence requires confirmation"  , :aggregate_failures do
@@ -99,7 +99,7 @@ RSpec.describe Agentf::WorkflowEngine do
 
       engine = described_class.new(memory: memory_with_confirmation, base_path: base_path, provider: :opencode)
 
-      result = engine.execute("Add feature")
+      result = engine.execute(task: "Add feature")
 
       expect(result).to have_key("memory_confirmation_required")
       expect(result["memory_confirmation_required"]).to be_an(Array)

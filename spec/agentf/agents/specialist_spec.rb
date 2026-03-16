@@ -23,7 +23,7 @@ RSpec.describe Agentf::Agents::Specialist do
         agent: "ENGINEER"
       )
 
-      result = specialist.execute(subtask)
+      result = specialist.execute(task: subtask)
       expect(result["success"]).to be true
       expect(result["subtask_id"]).to eq("sub_1")
     end
@@ -45,7 +45,7 @@ RSpec.describe Agentf::Agents::Specialist do
         agent: "ENGINEER"
       )
 
-      result = specialist.execute(subtask)
+      result = specialist.execute(task: subtask)
       expect(result["success"]).to be false
       expect(result["subtask_id"]).to eq("sub_2")
     end
@@ -59,7 +59,7 @@ RSpec.describe Agentf::Agents::Specialist do
 
       expect(memory).to receive(:store_success)
 
-      result = specialist.execute(subtask)
+      result = specialist.execute(task: subtask)
       expect(result["success"]).to be true
     end
   end

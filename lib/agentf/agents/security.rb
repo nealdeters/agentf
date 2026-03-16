@@ -93,6 +93,10 @@ module Agentf
         end
       end
 
+      def execute(task:, context: {}, agents: {}, commands: {}, logger: nil)
+        assess(task: task, context: context)
+      end
+
       private
 
       def summarize_findings(findings)

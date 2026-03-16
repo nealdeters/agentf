@@ -19,7 +19,9 @@ RSpec.describe Agentf::Service::Providers::OpenCode do
     let(:architect) { instance_double(Agentf::Agents::Architect) }
 
     it "executes architect via shared contract" do
-      allow(architect).to receive(:plan_task).with("Add auth").and_return("ok" => true)
+      # Architect now implements `execute`; simulate a real Architect
+      # instance that responds to `execute` as the provider requires.
+      allow(architect).to receive(:execute).with(task: "Add auth", context: {}, agents: { "PLANNER" => architect }, commands: {}, logger: nil).and_return("ok" => true)
 
       result = provider.execute_agent(
         agent_name: "PLANNER",
@@ -46,15 +48,21 @@ RSpec.describe Agentf::Service::Providers::OpenCode do
 
     it "supports tester red phase in TDD mode"  , :aggregate_failures do
       tester = instance_double(Agentf::Agents::Tester)
-      tester_commands = instance_double(Agentf::Commands::Tester)
-      allow(tester_commands).to receive(:generate_unit_tests)
+
+      # Provider delegates to the agent's `execute` entrypoint. Stub execute
+      # to return the TDD red-phase payload expected by the orchestrator.
+      allow(tester).to receive(:execute).and_return(
+        "tdd_phase" => "red",
+        "passed" => false,
+        "failure_signature" => "expected-failure-app/models/user.rb"
+      )
 
       result = provider.execute_agent(
         agent_name: "QA_TESTER",
         task: "Fix auth",
         context: { "source_file" => "app/models/user.rb", "tdd_phase" => "red" },
         agents: { "QA_TESTER" => tester },
-        commands: { "tester" => tester_commands }
+        commands: { "tester" => instance_double(Agentf::Commands::Tester) }
       )
 
       expect(result["tdd_phase"]).to eq("red")

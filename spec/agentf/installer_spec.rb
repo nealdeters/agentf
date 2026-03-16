@@ -31,11 +31,10 @@ RSpec.describe Agentf::Installer do
 
       expect(File).to exist(agent_path)
       expect(File).to exist(command_path)
-      expect(File.read(agent_path)).to include("## Memory Integration")
-      expect(File.read(agent_path)).to include("## Memory Actions")
-      expect(File.read(agent_path)).to include("## Policy Boundaries")
-      expect(File.read(agent_path)).to include("agentf-memory-recent")
-      expect(File.read(agent_path)).to include("get_recent_memories")
+      content = File.read(agent_path)
+      expect(content).to include("This manifest is a thin pointer.")
+      expect(content).to include("IMPORTANT: Use the `agentf-planner` tool")
+      expect(content).to include("Policy Summary:")
     end
 
     it "supports copilot file naming conventions"  , :aggregate_failures do
@@ -53,9 +52,9 @@ RSpec.describe Agentf::Installer do
 
       expect(File).to exist(agent_manifest)
       expect(File).to exist(command_manifest)
-      expect(File.read(agent_manifest)).to include("## Copilot MCP Integration")
-      expect(File.read(agent_manifest)).to include("agentf-code-glob")
-      expect(File.read(command_manifest)).to include("## Copilot MCP Usage")
+      expect(File.read(agent_manifest)).to include("This manifest is a thin pointer.")
+      expect(File.read(agent_manifest)).to include("IMPORTANT: Use the `agentf-planner` tool")
+      expect(File.read(command_manifest)).to include("This is a thin command manifest")
     end
 
     it "bootstraps opencode helper directories and files"  , :aggregate_failures do
@@ -158,9 +157,9 @@ RSpec.describe Agentf::Installer do
       agent_path = File.join(local_root, ".opencode/agents/agentf-planner.md")
       content = File.read(agent_path)
 
-      # Architect reads get_recent_memories and get_pitfalls
-      expect(content).to include("agentf-memory-recent")
-      expect(content).to include("agentf-memory-recent")
+      # Manifests are now thin pointers; ensure pointer and policy summary exist
+      expect(content).to include("This manifest is a thin pointer.")
+      expect(content).to include("Policy Summary:")
     end
 
     it "includes read fallback for agents with no explicit reads"  , :aggregate_failures do
@@ -176,9 +175,9 @@ RSpec.describe Agentf::Installer do
       agent_path = File.join(local_root, ".opencode/agents/agentf-engineer.md")
       content = File.read(agent_path)
 
-      # Specialist has no reads, so fallback should add a read action
-      expect(content).to include("Read:")
-      expect(content).to include("agentf-memory-recent")
+      # Manifests are thin pointers even for agents without explicit reads
+      expect(content).to include("This manifest is a thin pointer.")
+      expect(content).to include("Policy Summary:")
     end
   end
 end

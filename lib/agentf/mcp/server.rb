@@ -4,6 +4,14 @@ begin
   require "mcp"
 rescue LoadError
   require_relative "stub"
+else
+  # If the installed `mcp` gem is present but does not expose the simple
+  # Server DSL our code expects (notably the `tool` helper), prefer the
+  # bundled stub implementation so tests and the stdio server behave
+  # consistently in CI and developer machines.
+  if defined?(::MCP::Server) && !::MCP::Server.instance_methods.include?(:tool)
+    require_relative "stub"
+  end
 end
 require "json"
 

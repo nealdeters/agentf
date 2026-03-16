@@ -172,8 +172,12 @@ module Agentf
         render_workflow_engine_manifest
       )
       writes << write_manifest(
-        File.join(root, ".opencode/plugins/agentf-plugin.ts"),
+        File.join(root, ".opencode/plugins/opencode-plugin.d.ts"),
         render_opencode_plugin
+      )
+      writes << write_manifest(
+        File.join(root, ".opencode/plugins/agentf-plugin.ts"),
+        render_agentf_plugin
       )
       # Backwards-compatible helper: expose individual tool wrappers
       writes << write_manifest(
@@ -224,46 +228,38 @@ module Agentf
     end
 
     def render_agent_manifest(klass, provider:)
-      meta = {
-        "name" => agent_identifier(klass),
-        "description" => klass.description,
-        "commands" => klass.commands,
-        "memory" => klass.memory_concepts,
-        "policy" => klass.policy_boundaries
-      }
+      # Emit a minimal, stable manifest that acts as a pointer to the runtime
+      # tool implemented by the plugin/CLI. Keep filename and `name` stable so
+      # upgrades remain compatible with existing installs.
+      tool_name = agent_identifier(klass)
+
+      # Build a short policy summary (guard nils and limit length)
+      pb = klass.respond_to?(:policy_boundaries) ? klass.policy_boundaries || {} : {}
+      always = Array(pb["always"]).join("; ")
+      ask_first = Array(pb["ask_first"]).join("; ")
+      never = Array(pb["never"]).join("; ")
+
+      parts = []
+      parts << "Always: #{always}" unless always.to_s.strip.empty?
+      parts << "Ask first: #{ask_first}" unless ask_first.to_s.strip.empty?
+      parts << "Never: #{never}" unless never.to_s.strip.empty?
+      policy_summary = parts.join(" | ")
+
+      description = klass.respond_to?(:description) ? klass.description.to_s.strip : ""
 
       <<~MARKDOWN
-        #{meta.to_yaml}---
-        #{klass.prompt}
+        ---
+        name: #{tool_name}
+        description: #{description}
+        ---
+        This manifest is a thin pointer. All runtime logic lives in the `#{tool_name}` tool.
 
-        ## Core Mission
-        #{klass.description}
+        IMPORTANT: Use the `#{tool_name}` tool for any filesystem, codebase, or memory actions.
+        The manifest contains only routing and a small policy summary — the tool is the
+        authoritative implementation.
 
-        ## When To Use
-        #{klass.when_to_use}
+        Policy Summary: #{policy_summary}
 
-        ## Deliverables
-        #{Array(klass.deliverables).map { |item| "- #{item}" }.join("\n")}
-
-        ## Working Style
-        #{klass.working_style}
-
-        ## Memory Integration
-        - Reads: #{Array(klass.memory_concepts["reads"]).join(", ")}
-        - Writes: #{Array(klass.memory_concepts["writes"]).join(", ")}
-        - Policy: #{klass.memory_concepts["policy"]}
-
-        ## Memory Actions
-        #{memory_actions_for(klass, provider: provider).join("\n")}
-
-        ## Policy Boundaries
-        - Always: #{Array(klass.policy_boundaries["always"]).join("; ")}
-        - Ask first: #{Array(klass.policy_boundaries["ask_first"]).join("; ")}
-        - Never: #{Array(klass.policy_boundaries["never"]).join("; ")}
-        - Required inputs: #{Array(klass.policy_boundaries["required_inputs"]).join(", ")}
-        - Required outputs: #{Array(klass.policy_boundaries["required_outputs"]).join(", ")}
-
-        #{copilot_mcp_agent_section(provider: provider)}
       MARKDOWN
     end
 
@@ -320,20 +316,19 @@ module Agentf
     end
 
     def render_command_manifest(manifest, provider:)
-      commands = Array(manifest.fetch("commands"))
-      frontmatter = {
-        "name" => command_identifier(manifest.fetch("name")),
-        "description" => manifest.fetch("description"),
-        "commands" => commands
-      }
+      cmd_name = command_identifier(manifest.fetch("name"))
+      desc = manifest.fetch("description", "").to_s.strip
 
       <<~MARKDOWN
-        #{frontmatter.to_yaml}---
-        # Commands
+        ---
+        name: #{cmd_name}
+        description: #{desc}
+        ---
+        This is a thin command manifest that routes execution to the `#{cmd_name}` tool.
 
-        #{commands.map { |command| "- #{command.fetch('name')}" }.join("\n")}
+        IMPORTANT: Do not embed runtime logic here. Invoke the `#{cmd_name}` tool to perform
+        any codebase or memory operations.
 
-        #{copilot_mcp_command_section(manifest: manifest, provider: provider)}
       MARKDOWN
     end
 
@@ -419,12 +414,33 @@ module Agentf
 
     def render_opencode_plugin
       <<~'TYPESCRIPT'
+      declare module "@opencode-ai/plugin" {
+        export type Plugin = (input: any) => Promise<any>;
+
+        // Minimal `tool` factory type used by our plugin. Keep very loose to avoid
+        // coupling to the full SDK types in this repo.
+        export function tool(def: any): any;
+
+        export const schema: any;
+
+        export default {} as { tool: typeof tool; schema: any };
+      }
+      TYPESCRIPT
+    end
+
+    def render_agentf_plugin
+      <<~'TYPESCRIPT'
         // tools:
         import { execFile } from "child_process";
         import { promisify } from "util";
-        import path from "path";
-        import { type Plugin, tool } from "@opencode-ai/plugin";
-        import fs from "fs";
+        import * as path from "path";
+        // Avoid importing host SDK types directly to reduce coupling during local
+        // type-checks. Use a runtime require and loose `any` types here.
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const _opencode_plugin: any = require("@opencode-ai/plugin");
+        const tool = _opencode_plugin.tool;
+        type Plugin = any;
+        import * as fs from "fs";
 
         const execFileAsync = promisify(execFile);
 
@@ -554,299 +570,377 @@ module Agentf
           });
 
           const text = stdout.toString().trim();
-          return text || "{}";
+          if (!text) return {};
+
+          try {
+            return JSON.parse(text);
+          } catch (err) {
+            // If the CLI returned non-JSON, return a structured error object so callers
+            // can surface useful debugging info instead of crashing.
+            return { ok: false, _parse_error: String(err), _raw: text };
+          }
         }
 
-        export const agentfPlugin: Plugin = async () => {
-          await ensureAgentfPreflight(process.env.PWD || process.cwd());
+        // Lightweight frontmatter parser: extract YAML between leading `---` blocks
+        function parseFrontmatter(content: string): Record<string, string> {
+          const res: Record<string, string> = {};
+          const fmStart = content.indexOf("---");
+          if (fmStart === -1) return res;
+          const rest = content.slice(fmStart + 3);
+          const fmEndIdx = rest.indexOf("---");
+          if (fmEndIdx === -1) return res;
+          const block = rest.slice(0, fmEndIdx).trim();
+          const lines = block.split(/\r?\n/);
+          for (const line of lines) {
+            const m = line.match(/^\s*([A-Za-z0-9_\-]+)\s*:\s*(.+)\s*$/);
+            if (!m) continue;
+            let key = m[1];
+            let value = m[2];
+            // strip surrounding quotes
+            if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+              value = value.slice(1, -1);
+            }
+            res[key] = value;
+          }
+          return res;
+        }
 
-          return {
-            tool: {
-              "agentf-code-glob": tool({
-                description: "Find files using project glob patterns via Agentf code CLI.",
-                args: {
-                  pattern: tool.schema.string().describe("Glob pattern, example: lib/**/*.rb"),
-                  types: tool.schema.array(tool.schema.string()).optional().describe("Optional file extensions"),
-                },
-                async execute(args, context) {
-                  const commandArgs = [];
-                  if (args.types?.length) {
-                    commandArgs.push(`--types=${args.types.join(",")}`);
-                  }
+        export const agentfPlugin = async (input: any) => {
+          const workspaceDir = input?.directory || process.env.PWD || process.cwd();
+          await ensureAgentfPreflight(workspaceDir);
 
-                  return runAgentfCli(context.directory, "code", "glob", [args.pattern, ...commandArgs]);
-                },
-              }),
-              "agentf-code-grep": tool({
-                description: "Search file contents via Agentf code CLI.",
-                args: {
-                  pattern: tool.schema.string().describe("Regex/text to search"),
-                  filePattern: tool.schema.string().optional().describe("Optional include pattern"),
-                  context: tool.schema.number().int().min(0).max(20).optional().describe("Context lines"),
-                },
-                async execute(args, context) {
-                  const commandArgs = [];
-                  if (args.filePattern) commandArgs.push(`--file-pattern=${args.filePattern}`);
-                  if (Number.isInteger(args.context)) commandArgs.push(`--context=${args.context}`);
+          // Build static tools map
+          const staticTools: Record<string, ReturnType<typeof tool>> = {
+            "agentf-code-glob": tool({
+              description: "Find files using project glob patterns via Agentf code CLI.",
+              args: {
+                pattern: tool.schema.string().describe("Glob pattern, example: lib/**/*.rb"),
+                types: tool.schema.array(tool.schema.string()).optional().describe("Optional file extensions"),
+              },
+              async execute(_args: any, context: any) {
+                const commandArgs = [];
+                if (_args.types?.length) {
+                  commandArgs.push(`--types=${_args.types.join(",")}`);
+                }
 
-                  return runAgentfCli(context.directory, "code", "grep", [args.pattern, ...commandArgs]);
-                },
-              }),
-              "agentf-code-tree": tool({
-                description: "Get directory tree data via Agentf code CLI.",
-                args: {
-                  depth: tool.schema.number().int().min(1).max(10).optional().describe("Max traversal depth"),
-                },
-                async execute(args, context) {
-                  const depth = args.depth ?? 3;
-                  return runAgentfCli(context.directory, "code", "tree", [`--depth=${depth}`]);
-                },
-              }),
-              "agentf-code-related-files": tool({
-                description: "Find import and related file hints for a target file.",
-                args: {
-                  targetFile: tool.schema.string().describe("Workspace-relative file path"),
-                },
-                async execute(args, context) {
-                  return runAgentfCli(context.directory, "code", "related", [args.targetFile]);
-                },
-              }),
-              "agentf-memory-recent": tool({
-                description: "Get recent Agentf memories from Redis.",
-                args: {
-                  limit: tool.schema.number().int().min(1).max(100).optional().describe("How many memories to return"),
-                },
-                async execute(args, context) {
-                  const limit = args.limit ?? 10;
-                  return runAgentfCli(context.directory, "memory", "recent", ["-n", String(limit)]);
-                },
-              }),
-              "agentf-memory-search": tool({
-                description: "Search Agentf memories by keyword.",
-                args: {
-                  query: tool.schema.string().describe("Search query"),
-                  limit: tool.schema.number().int().min(1).max(100).optional().describe("How many results to return"),
-                },
-                async execute(args, context) {
-                  const limit = args.limit ?? 10;
-                  return runAgentfCli(context.directory, "memory", "search", [args.query, "-n", String(limit)]);
-                },
-              }),
-              "agentf-memory-by-tag": tool({
-                description: "Get Agentf memories by tag.",
-                args: {
-                  tag: tool.schema.string().describe("Tag to filter by"),
-                  limit: tool.schema.number().int().min(1).max(100).optional().describe("How many results to return"),
-                },
-                async execute(args, context) {
-                  const limit = args.limit ?? 10;
-                  return runAgentfCli(context.directory, "memory", "by-tag", [args.tag, "-n", String(limit)]);
-                },
-              }),
-              "agentf-memory-by-agent": tool({
-                description: "Get Agentf memories by agent.",
-                args: {
-                  agent: tool.schema.string().describe("Agent name"),
-                  limit: tool.schema.number().int().min(1).max(100).optional().describe("How many results to return"),
-                },
-                async execute(args, context) {
-                  const limit = args.limit ?? 10;
-                  return runAgentfCli(context.directory, "memory", "by-agent", [args.agent, "-n", String(limit)]);
-                },
-              }),
-              "agentf-memory-by-type": tool({
-                description: "Get Agentf memories by type.",
-                args: {
-                  type: tool.schema.string().describe("Memory type (pitfall|lesson|success|business_intent|feature_intent)"),
-                  limit: tool.schema.number().int().min(1).max(100).optional().describe("How many results to return"),
-                },
-                async execute(args, context) {
-                  const limit = args.limit ?? 10;
-                  return runAgentfCli(context.directory, "memory", "by-type", [args.type, "-n", String(limit)]);
-                },
-              }),
-              "agentf-memory-tags": tool({
-                description: "List all unique memory tags.",
-                args: {},
-                async execute(_args, context) {
-                  return runAgentfCli(context.directory, "memory", "tags", []);
-                },
-              }),
-              "agentf-memory-pitfalls": tool({
-                description: "List pitfall memories.",
-                args: { limit: tool.schema.number().int().min(1).max(100).optional() },
-                async execute(args, context) {
-                  const limit = args.limit ?? 10;
-                  return runAgentfCli(context.directory, "memory", "pitfalls", ["-n", String(limit)]);
-                },
-              }),
-              "agentf-memory-lessons": tool({
-                description: "List lesson memories.",
-                args: { limit: tool.schema.number().int().min(1).max(100).optional() },
-                async execute(args, context) {
-                  const limit = args.limit ?? 10;
-                  return runAgentfCli(context.directory, "memory", "lessons", ["-n", String(limit)]);
-                },
-              }),
-              "agentf-memory-successes": tool({
-                description: "List success memories.",
-                args: { limit: tool.schema.number().int().min(1).max(100).optional() },
-                async execute(args, context) {
-                  const limit = args.limit ?? 10;
-                  return runAgentfCli(context.directory, "memory", "successes", ["-n", String(limit)]);
-                },
-              }),
-              "agentf-memory-intents": tool({
-                description: "List intents (business, feature or both).",
-                args: { kind: tool.schema.string().optional(), limit: tool.schema.number().int().min(1).max(100).optional() },
-                async execute(args, context) {
-                  const limit = args.limit ?? 10;
-                  const kind = args.kind ? String(args.kind) : "";
-                  const cmdArgs = kind ? [kind, "-n", String(limit)] : ["-n", String(limit)];
-                  return runAgentfCli(context.directory, "memory", "intents", cmdArgs);
-                },
-              }),
-              "agentf-memory-business-intents": tool({
-                description: "List business intents.",
-                args: { limit: tool.schema.number().int().min(1).max(100).optional() },
-                async execute(args, context) {
-                  const limit = args.limit ?? 10;
-                  return runAgentfCli(context.directory, "memory", "business-intents", ["-n", String(limit)]);
-                },
-              }),
-              "agentf-memory-feature-intents": tool({
-                description: "List feature intents.",
-                args: { limit: tool.schema.number().int().min(1).max(100).optional() },
-                async execute(args, context) {
-                  const limit = args.limit ?? 10;
-                  return runAgentfCli(context.directory, "memory", "feature-intents", ["-n", String(limit)]);
-                },
-              }),
-              "agentf-memory-add-business-intent": tool({
-                description: "Store a business intent in Redis.",
-                args: {
-                  title: tool.schema.string(),
-                  description: tool.schema.string(),
-                  tags: tool.schema.array(tool.schema.string()).optional(),
-                  constraints: tool.schema.array(tool.schema.string()).optional(),
-                  priority: tool.schema.number().int().optional(),
-                },
-                async execute(args, context) {
-                  const commandArgs = [args.title, args.description];
-                  if (args.tags?.length) commandArgs.push(`--tags=${args.tags.join(",")}`);
-                  if (args.constraints?.length) commandArgs.push(`--constraints=${args.constraints.join(";")}`);
-                  if (Number.isInteger(args.priority)) commandArgs.push(`--priority=${String(args.priority)}`);
-                  return runAgentfCli(context.directory, "memory", "add-business-intent", commandArgs);
-                },
-              }),
-              "agentf-memory-add-feature-intent": tool({
-                description: "Store a feature intent in Redis.",
-                args: {
-                  title: tool.schema.string(),
-                  description: tool.schema.string(),
-                  tags: tool.schema.array(tool.schema.string()).optional(),
-                  acceptance: tool.schema.array(tool.schema.string()).optional(),
-                  non_goals: tool.schema.array(tool.schema.string()).optional(),
-                  related_task_id: tool.schema.string().optional(),
-                },
-                async execute(args, context) {
-                  const commandArgs = [args.title, args.description];
-                  if (args.tags?.length) commandArgs.push(`--tags=${args.tags.join(",")}`);
-                  if (args.acceptance?.length) commandArgs.push(`--acceptance=${args.acceptance.join(";")}`);
-                  if (args.non_goals?.length) commandArgs.push(`--non-goals=${args.non_goals.join(";")}`);
-                  if (args.related_task_id) commandArgs.push(`--task=${args.related_task_id}`);
-                  return runAgentfCli(context.directory, "memory", "add-feature-intent", commandArgs);
-                },
-              }),
-              "agentf-memory-neighbors": tool({
-                description: "Get neighboring memory nodes by edge traversal.",
-                args: {
-                  node_id: tool.schema.string(),
-                  relation: tool.schema.string().optional(),
-                  depth: tool.schema.number().int().optional(),
-                  limit: tool.schema.number().int().optional(),
-                },
-                async execute(args, context) {
-                  const commandArgs = [args.node_id];
-                  if (args.relation) commandArgs.push(`--relation=${args.relation}`);
-                  if (Number.isInteger(args.depth)) commandArgs.push(`--depth=${String(args.depth)}`);
-                  if (Number.isInteger(args.limit)) commandArgs.push(`-n`, String(args.limit));
-                  return runAgentfCli(context.directory, "memory", "neighbors", commandArgs);
-                },
-              }),
-              "agentf-memory-subgraph": tool({
-                description: "Build a subgraph from seed ids.",
-                args: {
-                  seed_ids: tool.schema.array(tool.schema.string()),
-                  relation_filters: tool.schema.array(tool.schema.string()).optional(),
-                  depth: tool.schema.number().int().optional(),
-                  limit: tool.schema.number().int().optional(),
-                },
-                async execute(args, context) {
-                  const seeds = (args.seed_ids || []).join(",");
-                  const commandArgs = [seeds];
-                  if (args.relation_filters?.length) commandArgs.push(`--relation=${args.relation_filters.join(",")}`);
-                  if (Number.isInteger(args.depth)) commandArgs.push(`--depth=${String(args.depth)}`);
-                  if (Number.isInteger(args.limit)) commandArgs.push(`-n`, String(args.limit));
-                  return runAgentfCli(context.directory, "memory", "subgraph", commandArgs);
-                },
-              }),
-              "agentf-memory-add-lesson": tool({
-                description: "Store a lesson memory in Redis.",
-                args: {
-                  title: tool.schema.string(),
-                  description: tool.schema.string(),
-                  agent: tool.schema.string().optional(),
-                  tags: tool.schema.array(tool.schema.string()).optional(),
-                  context: tool.schema.string().optional(),
-                },
-                async execute(args, context) {
-                  const commandArgs = [args.title, args.description];
-                  if (args.agent) commandArgs.push(`--agent=${args.agent}`);
-                  if (args.tags?.length) commandArgs.push(`--tags=${args.tags.join(",")}`);
-                  if (args.context) commandArgs.push(`--context=${args.context}`);
+                return runAgentfCli(context.directory, "code", "glob", [_args.pattern, ...commandArgs]);
+              },
+            }),
+            "agentf-code-grep": tool({
+              description: "Search file contents via Agentf code CLI.",
+              args: {
+                pattern: tool.schema.string().describe("Regex/text to search"),
+                filePattern: tool.schema.string().optional().describe("Optional include pattern"),
+                context: tool.schema.number().int().min(0).max(20).optional().describe("Context lines"),
+              },
+              async execute(_args: any, context: any) {
+                const commandArgs = [];
+                if (_args.filePattern) commandArgs.push(`--file-pattern=${_args.filePattern}`);
+                if (Number.isInteger(_args.context)) commandArgs.push(`--context=${_args.context}`);
 
-                  return runAgentfCli(context.directory, "memory", "add-lesson", commandArgs);
-                },
-              }),
-              "agentf-memory-add-success": tool({
-                description: "Store a success memory in Redis.",
-                args: {
-                  title: tool.schema.string(),
-                  description: tool.schema.string(),
-                  agent: tool.schema.string().optional(),
-                  tags: tool.schema.array(tool.schema.string()).optional(),
-                  context: tool.schema.string().optional(),
-                },
-                async execute(args, context) {
-                  const commandArgs = [args.title, args.description];
-                  if (args.agent) commandArgs.push(`--agent=${args.agent}`);
-                  if (args.tags?.length) commandArgs.push(`--tags=${args.tags.join(",")}`);
-                  if (args.context) commandArgs.push(`--context=${args.context}`);
+                return runAgentfCli(context.directory, "code", "grep", [_args.pattern, ...commandArgs]);
+              },
+            }),
+            "agentf-code-tree": tool({
+              description: "Get directory tree data via Agentf code CLI.",
+              args: {
+                depth: tool.schema.number().int().min(1).max(10).optional().describe("Max traversal depth"),
+              },
+              async execute(_args: any, context: any) {
+                const depth = _args.depth ?? 3;
+                return runAgentfCli(context.directory, "code", "tree", [`--depth=${depth}`]);
+              },
+            }),
+            "agentf-code-related-files": tool({
+              description: "Find import and related file hints for a target file.",
+              args: {
+                targetFile: tool.schema.string().describe("Workspace-relative file path"),
+              },
+              async execute(_args: any, context: any) {
+                return runAgentfCli(context.directory, "code", "related", [_args.targetFile]);
+              },
+            }),
+            "agentf-memory-recent": tool({
+              description: "Get recent Agentf memories from Redis.",
+              args: {
+                limit: tool.schema.number().int().min(1).max(100).optional().describe("How many memories to return"),
+              },
+              async execute(_args: any, context: any) {
+                const limit = _args.limit ?? 10;
+                return runAgentfCli(context.directory, "memory", "recent", ["-n", String(limit)]);
+              },
+            }),
+            "agentf-memory-search": tool({
+              description: "Search Agentf memories by keyword.",
+              args: {
+                query: tool.schema.string().describe("Search query"),
+                limit: tool.schema.number().int().min(1).max(100).optional().describe("How many results to return"),
+              },
+              async execute(_args: any, context: any) {
+                const limit = _args.limit ?? 10;
+                return runAgentfCli(context.directory, "memory", "search", [_args.query, "-n", String(limit)]);
+              },
+            }),
+            "agentf-memory-by-tag": tool({
+              description: "Get Agentf memories by tag.",
+              args: {
+                tag: tool.schema.string().describe("Tag to filter by"),
+                limit: tool.schema.number().int().min(1).max(100).optional().describe("How many results to return"),
+              },
+              async execute(_args: any, context: any) {
+                const limit = _args.limit ?? 10;
+                return runAgentfCli(context.directory, "memory", "by-tag", [_args.tag, "-n", String(limit)]);
+              },
+            }),
+            "agentf-memory-by-agent": tool({
+              description: "Get Agentf memories by agent.",
+              args: {
+                agent: tool.schema.string().describe("Agent name"),
+                limit: tool.schema.number().int().min(1).max(100).optional().describe("How many results to return"),
+              },
+              async execute(_args: any, context: any) {
+                const limit = _args.limit ?? 10;
+                return runAgentfCli(context.directory, "memory", "by-agent", [_args.agent, "-n", String(limit)]);
+              },
+            }),
+            "agentf-memory-by-type": tool({
+              description: "Get Agentf memories by type.",
+              args: {
+                type: tool.schema.string().describe("Memory type (pitfall|lesson|success|business_intent|feature_intent)"),
+                limit: tool.schema.number().int().min(1).max(100).optional().describe("How many results to return"),
+              },
+              async execute(_args: any, context: any) {
+                const limit = _args.limit ?? 10;
+                return runAgentfCli(context.directory, "memory", "by-type", [_args.type, "-n", String(limit)]);
+              },
+            }),
+            "agentf-memory-tags": tool({
+              description: "List all unique memory tags.",
+              args: {},
+              async execute(_args: any, context: any) {
+                return runAgentfCli(context.directory, "memory", "tags", []);
+              },
+            }),
+            "agentf-memory-pitfalls": tool({
+              description: "List pitfall memories.",
+              args: { limit: tool.schema.number().int().min(1).max(100).optional() },
+              async execute(_args: any, context: any) {
+                const limit = _args.limit ?? 10;
+                return runAgentfCli(context.directory, "memory", "pitfalls", ["-n", String(limit)]);
+              },
+            }),
+            "agentf-memory-lessons": tool({
+              description: "List lesson memories.",
+              args: { limit: tool.schema.number().int().min(1).max(100).optional() },
+              async execute(_args: any, context: any) {
+                const limit = _args.limit ?? 10;
+                return runAgentfCli(context.directory, "memory", "lessons", ["-n", String(limit)]);
+              },
+            }),
+            "agentf-memory-successes": tool({
+              description: "List success memories.",
+              args: { limit: tool.schema.number().int().min(1).max(100).optional() },
+              async execute(_args: any, context: any) {
+                const limit = _args.limit ?? 10;
+                return runAgentfCli(context.directory, "memory", "successes", ["-n", String(limit)]);
+              },
+            }),
+            "agentf-memory-intents": tool({
+              description: "List intents (business, feature or both).",
+              args: { kind: tool.schema.string().optional(), limit: tool.schema.number().int().min(1).max(100).optional() },
+              async execute(_args: any, context: any) {
+                const limit = _args.limit ?? 10;
+                const kind = _args.kind ? String(_args.kind) : "";
+                const cmdArgs = kind ? [kind, "-n", String(limit)] : ["-n", String(limit)];
+                return runAgentfCli(context.directory, "memory", "intents", cmdArgs);
+              },
+            }),
+            "agentf-memory-business-intents": tool({
+              description: "List business intents.",
+              args: { limit: tool.schema.number().int().min(1).max(100).optional() },
+              async execute(_args: any, context: any) {
+                const limit = _args.limit ?? 10;
+                return runAgentfCli(context.directory, "memory", "business-intents", ["-n", String(limit)]);
+              },
+            }),
+            "agentf-memory-feature-intents": tool({
+              description: "List feature intents.",
+              args: { limit: tool.schema.number().int().min(1).max(100).optional() },
+              async execute(_args: any, context: any) {
+                const limit = _args.limit ?? 10;
+                return runAgentfCli(context.directory, "memory", "feature-intents", ["-n", String(limit)]);
+              },
+            }),
+            "agentf-memory-add-business-intent": tool({
+              description: "Store a business intent in Redis.",
+              args: {
+                title: tool.schema.string(),
+                description: tool.schema.string(),
+                tags: tool.schema.array(tool.schema.string()).optional(),
+                constraints: tool.schema.array(tool.schema.string()).optional(),
+                priority: tool.schema.number().int().optional(),
+              },
+              async execute(_args: any, context: any) {
+                const commandArgs = [_args.title, _args.description];
+                if (_args.tags?.length) commandArgs.push(`--tags=${_args.tags.join(",")}`);
+                if (_args.constraints?.length) commandArgs.push(`--constraints=${_args.constraints.join(";")}`);
+                if (Number.isInteger(_args.priority)) commandArgs.push(`--priority=${String(_args.priority)}`);
+                return runAgentfCli(context.directory, "memory", "add-business-intent", commandArgs);
+              },
+            }),
+            "agentf-memory-add-feature-intent": tool({
+              description: "Store a feature intent in Redis.",
+              args: {
+                title: tool.schema.string(),
+                description: tool.schema.string(),
+                tags: tool.schema.array(tool.schema.string()).optional(),
+                acceptance: tool.schema.array(tool.schema.string()).optional(),
+                non_goals: tool.schema.array(tool.schema.string()).optional(),
+                related_task_id: tool.schema.string().optional(),
+              },
+              async execute(_args: any, context: any) {
+                const commandArgs = [_args.title, _args.description];
+                if (_args.tags?.length) commandArgs.push(`--tags=${_args.tags.join(",")}`);
+                if (_args.acceptance?.length) commandArgs.push(`--acceptance=${_args.acceptance.join(";")}`);
+                if (_args.non_goals?.length) commandArgs.push(`--non-goals=${_args.non_goals.join(";")}`);
+                if (_args.related_task_id) commandArgs.push(`--task=${_args.related_task_id}`);
+                return runAgentfCli(context.directory, "memory", "add-feature-intent", commandArgs);
+              },
+            }),
+            "agentf-memory-neighbors": tool({
+              description: "Get neighboring memory nodes by edge traversal.",
+              args: {
+                node_id: tool.schema.string(),
+                relation: tool.schema.string().optional(),
+                depth: tool.schema.number().int().optional(),
+                limit: tool.schema.number().int().optional(),
+              },
+              async execute(_args: any, context: any) {
+                const commandArgs = [_args.node_id];
+                if (_args.relation) commandArgs.push(`--relation=${_args.relation}`);
+                if (Number.isInteger(_args.depth)) commandArgs.push(`--depth=${String(_args.depth)}`);
+                if (Number.isInteger(_args.limit)) commandArgs.push(`-n`, String(_args.limit));
+                return runAgentfCli(context.directory, "memory", "neighbors", commandArgs);
+              },
+            }),
+            "agentf-memory-subgraph": tool({
+              description: "Build a subgraph from seed ids.",
+              args: {
+                seed_ids: tool.schema.array(tool.schema.string()),
+                relation_filters: tool.schema.array(tool.schema.string()).optional(),
+                depth: tool.schema.number().int().optional(),
+                limit: tool.schema.number().int().optional(),
+              },
+              async execute(_args: any, context: any) {
+                const seeds = (_args.seed_ids || []).join(",");
+                const commandArgs = [seeds];
+                if (_args.relation_filters?.length) commandArgs.push(`--relation=${_args.relation_filters.join(",")}`);
+                if (Number.isInteger(_args.depth)) commandArgs.push(`--depth=${String(_args.depth)}`);
+                if (Number.isInteger(_args.limit)) commandArgs.push(`-n`, String(_args.limit));
+                return runAgentfCli(context.directory, "memory", "subgraph", commandArgs);
+              },
+            }),
+            "agentf-memory-add-lesson": tool({
+              description: "Store a lesson memory in Redis.",
+              args: {
+                title: tool.schema.string(),
+                description: tool.schema.string(),
+                agent: tool.schema.string().optional(),
+                tags: tool.schema.array(tool.schema.string()).optional(),
+                context: tool.schema.string().optional(),
+              },
+              async execute(_args: any, context: any) {
+                const commandArgs = [_args.title, _args.description];
+                if (_args.agent) commandArgs.push(`--agent=${_args.agent}`);
+                if (_args.tags?.length) commandArgs.push(`--tags=${_args.tags.join(",")}`);
+                if (_args.context) commandArgs.push(`--context=${_args.context}`);
 
-                  return runAgentfCli(context.directory, "memory", "add-success", commandArgs);
-                },
-              }),
-              "agentf-memory-add-pitfall": tool({
-                description: "Store a pitfall memory in Redis.",
-                args: {
-                  title: tool.schema.string(),
-                  description: tool.schema.string(),
-                  agent: tool.schema.string().optional(),
-                  tags: tool.schema.array(tool.schema.string()).optional(),
-                  context: tool.schema.string().optional(),
-                },
-                async execute(args, context) {
-                  const commandArgs = [args.title, args.description];
-                  if (args.agent) commandArgs.push(`--agent=${args.agent}`);
-                  if (args.tags?.length) commandArgs.push(`--tags=${args.tags.join(",")}`);
-                  if (args.context) commandArgs.push(`--context=${args.context}`);
+                return runAgentfCli(context.directory, "memory", "add-lesson", commandArgs);
+              },
+            }),
+            "agentf-memory-add-success": tool({
+              description: "Store a success memory in Redis.",
+              args: {
+                title: tool.schema.string(),
+                description: tool.schema.string(),
+                agent: tool.schema.string().optional(),
+                tags: tool.schema.array(tool.schema.string()).optional(),
+                context: tool.schema.string().optional(),
+              },
+              async execute(_args: any, context: any) {
+                const commandArgs = [_args.title, _args.description];
+                if (_args.agent) commandArgs.push(`--agent=${_args.agent}`);
+                if (_args.tags?.length) commandArgs.push(`--tags=${_args.tags.join(",")}`);
+                if (_args.context) commandArgs.push(`--context=${_args.context}`);
 
-                  return runAgentfCli(context.directory, "memory", "add-pitfall", commandArgs);
-                },
-              }),
-            },
+                return runAgentfCli(context.directory, "memory", "add-success", commandArgs);
+              },
+            }),
+            "agentf-memory-add-pitfall": tool({
+              description: "Store a pitfall memory in Redis.",
+              args: {
+                title: tool.schema.string(),
+                description: tool.schema.string(),
+                agent: tool.schema.string().optional(),
+                tags: tool.schema.array(tool.schema.string()).optional(),
+                context: tool.schema.string().optional(),
+              },
+              async execute(_args: any, context: any) {
+                const commandArgs = [_args.title, _args.description];
+                if (_args.agent) commandArgs.push(`--agent=${_args.agent}`);
+                if (_args.tags?.length) commandArgs.push(`--tags=${_args.tags.join(",")}`);
+                if (_args.context) commandArgs.push(`--context=${_args.context}`);
+
+                return runAgentfCli(context.directory, "memory", "add-pitfall", commandArgs);
+              },
+            }),
           };
+
+          const agentTools: Record<string, ReturnType<typeof tool>> = {};
+          const absDir = path.join(process.cwd(), ".opencode/agents");
+
+          // Guard: agents directory may not exist in minimal workspaces (eg. tests).
+          if (fs.existsSync(absDir)) {
+            for (const file of fs.readdirSync(absDir)) {
+              const full = path.join(absDir, file);
+              if (!fs.statSync(full).isFile()) continue;
+              const content = fs.readFileSync(full, "utf8");
+              const fm = parseFrontmatter(content);
+              const toolName = fm["name"] || path.basename(file, path.extname(file));
+
+              if ((staticTools as any)[toolName]) continue;
+
+              const agentName = toolName.replace(/^agentf-/, "");
+
+              agentTools[toolName] = tool({
+                description: `Invoke agent ${agentName} via the agentf CLI`,
+                args: {
+                  input: tool.schema.string().optional().describe("Optional input prompt or payload"),
+                  confirmedWrite: tool.schema.string().optional().describe("Continuation token for confirmed writes"),
+                },
+                async execute(_args: any, context: any) {
+                  const cmdArgs: string[] = [];
+                  // Ensure complex payloads are passed as a single JSON argument so the
+                  // Ruby CLI can parse structured tasks. Accept strings as-is but
+                  // stringify objects to avoid `[object Object]` being sent.
+                  if (_args.input !== undefined) {
+                    if (typeof _args.input === "object") {
+                      cmdArgs.push(JSON.stringify(_args.input));
+                    } else {
+                      cmdArgs.push(String(_args.input));
+                    }
+                  }
+                  if (_args.confirmedWrite) cmdArgs.push(`--confirmed-write=${_args.confirmedWrite}`);
+                  return runAgentfCli(context.directory, "agent", agentName, cmdArgs);
+                },
+              });
+            }
+          }
+
+          const tools = { ...staticTools, ...agentTools };
+
+          // The plugin host expects a `tool` map (singular key) in the returned hooks.
+          return { tool: tools };
         };
 
         export default agentfPlugin;

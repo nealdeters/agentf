@@ -33,7 +33,7 @@ RSpec.describe "confirm and retry flow" do
     engine = Agentf::WorkflowEngine.new(memory: memory, base_path: base_path, provider: :opencode)
 
     # First execution should record a memory_confirmation_required entry
-    result = engine.execute("Add feature")
+    result = engine.execute(task: "Add feature")
     expect(result).to have_key("memory_confirmation_required")
     expect(result["memory_confirmation_required"]).to be_an(Array)
     first = result["memory_confirmation_required"].first

@@ -61,67 +61,14 @@ module Agentf
           agent = agents[agent_name]
           return { "error" => "Agent #{agent_name} not found" } unless agent
 
-          result = case agent_name
-                   when Agentf::AgentRoles::PLANNER
-                      agent.plan_task(task)
-                   when Agentf::AgentRoles::RESEARCHER
-                      query = context["explore_query"] || "*.rb"
-                      files = commands.fetch("explorer").glob(query)
-                      response = agent.explore(query)
-                      response["files"] = files
-                      response
-                   when Agentf::AgentRoles::QA_TESTER
-                       source_file = context["source_file"] || "app/models/application_record.rb"
-                       tester_commands = commands.fetch("tester")
-                       tdd_phase = context["tdd_phase"] || "normal"
+          # Provider no longer simulates TDD red-phase; delegate to Tester agent.
 
-                      if tdd_phase == "red"
-                        failure_signature = "expected-failure:#{File.basename(source_file)}:#{Time.now.to_i}"
-                        {
-                          "source_file" => source_file,
-                          "test_file" => source_file.sub(/\.rb$/, "_spec.rb"),
-                          "tdd_phase" => "red",
-                          "passed" => false,
-                          "failure_signature" => failure_signature,
-                          "stdout" => "Intentional TDD red failure captured"
-                        }
-                      else
-                        template = tester_commands.generate_unit_tests(source_file)
-                        response = agent.generate_tests(source_file)
-                        response["generated_code"] = template.test_code
-                        response["tdd_phase"] = tdd_phase
-                        response["failure_signature"] = context["tdd_failure_signature"]
-                        response
-                      end
-                    when Agentf::AgentRoles::INCIDENT_RESPONDER
-                      error = context["error"] || "No error provided"
-                      analysis = commands.fetch("debugger").parse_error(error)
-                      response = agent.diagnose(error, context: context["error_context"])
-                     response["analysis"] = {
-                       "error_type" => analysis.error_type,
-                       "root_cause" => analysis.possible_causes,
-                       "suggested_fix" => analysis.suggested_fix
-                     }
-                     response
-                    when Agentf::AgentRoles::UI_ENGINEER
-                      design_spec = context["design_spec"] || "Create a card component"
-                      spec = commands.fetch("designer").generate_component("GeneratedComponent", design_spec)
-                      response = agent.implement_design(design_spec)
-                      response["generated_code"] = spec.code
-                      response
-                    when Agentf::AgentRoles::ENGINEER
-                      subtask = context["current_subtask"] || { "description" => task }
-                      agent.execute(subtask)
-                    when Agentf::AgentRoles::SECURITY_REVIEWER
-                      agent.assess(task: task, context: context)
-                    when Agentf::AgentRoles::REVIEWER
-                      last_result = context["execution"] || {}
-                      agent.review(last_result)
-                    when Agentf::AgentRoles::KNOWLEDGE_MANAGER
-                      agent.sync_docs("project")
-                   else
-                     { "status" => "not_implemented" }
-                   end
+          unless agent.respond_to?(:execute)
+            raise "Agent #{agent_name} does not implement execute"
+          end
+
+          # Delegate execution to the agent's unified entrypoint.
+          result = agent.execute(task: task, context: context || {}, agents: agents, commands: commands, logger: logger)
 
           logger&.call("→ #{agent_name} Complete")
           result

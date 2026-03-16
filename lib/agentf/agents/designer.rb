@@ -89,6 +89,11 @@ module Agentf
           }
         end
       end
+
+      def execute(task:, context: {}, agents: {}, commands: {}, logger: nil)
+        spec = task.is_a?(String) ? task : context["design_spec"]
+        implement_design(spec, framework: context["framework"] || "react")
+      end
     end
   end
 end

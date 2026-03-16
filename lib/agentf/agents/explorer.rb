@@ -83,6 +83,11 @@ module Agentf
 
         { "query" => query, "files" => files, "context_gathered" => true }
       end
+
+      def execute(task:, context: {}, agents: {}, commands: {}, logger: nil)
+        query = context["explore_query"] || task || "*.rb"
+        explore(query, file_pattern: context["file_pattern"])
+      end
     end
   end
 end
