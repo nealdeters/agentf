@@ -25,7 +25,7 @@ RSpec.describe Agentf::Agents::Base do
 end
 
 RSpec.describe Agentf::Agents::Architect do
-  let(:memory) { double("memory", get_recent_memories: [], get_pitfalls: []) }
+  let(:memory) { double("memory", get_recent_memories: [], get_episodes: []) }
   subject(:architect) { described_class.new(memory) }
 
   describe "#plan_task" do
@@ -38,7 +38,7 @@ RSpec.describe Agentf::Agents::Architect do
 
     it "retrieves relevant memories"  , :aggregate_failures do
       expect(memory).to receive(:get_recent_memories).with(limit: 5)
-      expect(memory).to receive(:get_pitfalls).with(limit: 3)
+      expect(memory).to receive(:get_episodes).with(limit: 3, outcome: "negative")
 
       architect.plan_task("Test task")
     end
@@ -60,7 +60,7 @@ RSpec.describe Agentf::Agents::Specialist do
     it "executes a subtask"  , :aggregate_failures do
       subtask = { "id" => 1, "description" => "Implement feature" }
 
-      expect(memory).to receive(:store_success)
+      expect(memory).to receive(:store_episode)
       result = specialist.execute(task: subtask)
 
       expect(result["success"]).to be true
@@ -70,12 +70,13 @@ RSpec.describe Agentf::Agents::Specialist do
     it "stores success memory on success" do
       subtask = { "id" => 1, "description" => "Test", "task" => "Main task", "language" => "ruby" }
 
-      expect(memory).to receive(:store_success).with(
+      expect(memory).to receive(:store_episode).with(
+        type: "episode",
         title: "Completed: Test",
         description: "Successfully executed subtask 1",
         context: "Working on Main task",
-        tags: ["implementation", "ruby"],
-        agent: "ENGINEER"
+        agent: "ENGINEER",
+        outcome: "positive"
       )
 
       specialist.execute(task: subtask)
@@ -85,8 +86,7 @@ RSpec.describe Agentf::Agents::Specialist do
       # Force failure by raising
       subtask = { "id" => 1, "description" => "Test" }
 
-      # We'll simulate by allowing it to not call store_success
-      allow(memory).to receive(:store_success)
+      allow(memory).to receive(:store_episode)
       result = specialist.execute(task: subtask)
 
       expect(result["success"]).to be true
@@ -95,7 +95,7 @@ RSpec.describe Agentf::Agents::Specialist do
 end
 
 RSpec.describe Agentf::Agents::Reviewer do
-  let(:memory) { double("memory", get_pitfalls: [], get_recent_memories: []) }
+  let(:memory) { double("memory", get_episodes: [], get_recent_memories: []) }
   subject(:reviewer) { described_class.new(memory) }
 
   describe "#review" do
@@ -110,7 +110,7 @@ RSpec.describe Agentf::Agents::Reviewer do
 
     it "approves when no issues found" do
       subtask_result = { "subtask_id" => 1, "success" => true }
-      allow(memory).to receive(:get_pitfalls).and_return([])
+      allow(memory).to receive(:get_episodes).and_return([])
 
       result = reviewer.review(subtask_result)
 
@@ -132,8 +132,8 @@ RSpec.describe Agentf::Agents::Documenter do
 
     it "returns successes and pitfalls"  , :aggregate_failures do
       allow(memory).to receive(:get_recent_memories).and_return([
-        { "type" => "success" },
-        { "type" => "pitfall" }
+        { "type" => "episode", "outcome" => "positive" },
+        { "type" => "episode", "outcome" => "negative" }
       ])
 
       result = documenter.sync_docs("project")
@@ -146,7 +146,7 @@ RSpec.describe Agentf::Agents::Documenter do
 end
 
 RSpec.describe Agentf::Agents::Explorer do
-  let(:memory) { double("memory", store_episode: nil) }
+  let(:memory) { double("memory", store_lesson: nil) }
   let(:commands) { Agentf::Commands::Explorer.new(base_path: File.expand_path("../fixtures", __dir__)) }
   subject(:explorer_agent) { described_class.new(memory, commands: commands) }
 
@@ -159,7 +159,7 @@ RSpec.describe Agentf::Agents::Explorer do
     end
 
     it "stores exploration memory" do
-      expect(memory).to receive(:store_episode)
+      expect(memory).to receive(:store_lesson)
 
       explorer_agent.explore("app/**/*.rb")
     end
@@ -167,7 +167,7 @@ RSpec.describe Agentf::Agents::Explorer do
 end
 
 RSpec.describe Agentf::Agents::Tester do
-  let(:memory) { double("memory", store_success: nil) }
+  let(:memory) { double("memory", store_episode: nil) }
   let(:commands) { Agentf::Commands::Tester.new(base_path: File.expand_path("fixtures", __dir__)) }
   subject(:tester_agent) { described_class.new(memory, commands: commands) }
 
@@ -180,7 +180,7 @@ RSpec.describe Agentf::Agents::Tester do
     end
 
     it "stores success memory" do
-      expect(memory).to receive(:store_success)
+      expect(memory).to receive(:store_episode)
 
       tester_agent.generate_tests("app/models/user.rb")
     end
@@ -219,7 +219,7 @@ RSpec.describe Agentf::Agents::Debugger do
 end
 
 RSpec.describe Agentf::Agents::Designer do
-  let(:memory) { double("memory", store_success: nil) }
+  let(:memory) { double("memory", store_episode: nil) }
   let(:commands) { Agentf::Commands::Designer.new }
   subject(:designer_agent) { described_class.new(memory, commands: commands) }
 
@@ -232,7 +232,7 @@ RSpec.describe Agentf::Agents::Designer do
     end
 
     it "stores success memory" do
-      expect(memory).to receive(:store_success)
+      expect(memory).to receive(:store_episode)
 
       designer_agent.implement_design("Test design")
     end

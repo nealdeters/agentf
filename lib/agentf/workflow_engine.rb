@@ -293,18 +293,15 @@ module Agentf
     def persist_feature_intent(task:, workflow_type:, context:)
       acceptance_criteria = Array(context["acceptance_criteria"])
       non_goals = Array(context["non_goals"])
-      tags = [workflow_type, @provider.name.downcase]
-
       @memory.store_feature_intent(
         title: task,
         description: "Workflow intent captured by workflow engine",
         acceptance_criteria: acceptance_criteria,
         non_goals: non_goals,
-        tags: tags,
         agent: @name
       )
     rescue Agentf::Memory::RedisMemory::ConfirmationRequired => e
-      handle_memory_confirmation(e, attempted: { action: "store_feature_intent", title: task, tags: tags })
+      handle_memory_confirmation(e, attempted: { action: "store_feature_intent", title: task })
     rescue StandardError => e
       log "Intent capture skipped: #{e.message}"
     end
@@ -314,48 +311,51 @@ module Agentf
 
       if result["error"]
         begin
-          @memory.store_pitfall(
+          @memory.store_episode(
+            type: "episode",
             title: "#{agent_name} execution failure",
             description: result["error"],
             context: @workflow_state["task"],
-            tags: [@workflow_state["workflow_type"], "workflow_error"],
             agent: agent_name,
+            outcome: "negative",
             code_snippet: ""
           )
         rescue Agentf::Memory::RedisMemory::ConfirmationRequired => e
-          handle_memory_confirmation(e, attempted: { action: "store_pitfall", agent: agent_name, error: result["error"] })
+          handle_memory_confirmation(e, attempted: { action: "store_episode", agent: agent_name, error: result["error"], outcome: "negative" })
         end
         return
       end
 
       if agent_name == Agentf::AgentRoles::QA_TESTER && result["tdd_phase"] == "red" && result["passed"] == false
         begin
-          @memory.store_pitfall(
+          @memory.store_episode(
+            type: "episode",
             title: "TDD red phase captured",
             description: result["failure_signature"] || "Intentional failing test captured",
             context: @workflow_state["task"],
-            tags: [@workflow_state["workflow_type"], "tdd_red"],
             agent: agent_name,
+            outcome: "negative",
             code_snippet: ""
           )
         rescue Agentf::Memory::RedisMemory::ConfirmationRequired => e
-          handle_memory_confirmation(e, attempted: { action: "store_pitfall", agent: agent_name, tdd: true })
+          handle_memory_confirmation(e, attempted: { action: "store_episode", agent: agent_name, tdd: true, outcome: "negative" })
         end
         return
       end
 
       if agent_name == Agentf::AgentRoles::QA_TESTER && result["tdd_phase"] == "green" && result["passed"] == true
         begin
-          @memory.store_success(
+          @memory.store_episode(
+            type: "episode",
             title: "TDD green phase passed",
             description: "Resolved failing test signature: #{result['failure_signature']}",
             context: @workflow_state["task"],
-            tags: [@workflow_state["workflow_type"], "tdd_green"],
             agent: agent_name,
+            outcome: "positive",
             code_snippet: ""
           )
         rescue Agentf::Memory::RedisMemory::ConfirmationRequired => e
-          handle_memory_confirmation(e, attempted: { action: "store_success", agent: agent_name, tdd: true })
+          handle_memory_confirmation(e, attempted: { action: "store_episode", agent: agent_name, tdd: true, outcome: "positive" })
         end
         return
       end
@@ -365,7 +365,6 @@ module Agentf
           title: "#{agent_name} completed workflow step",
           description: "Agent step completed for #{@workflow_state['workflow_type']} workflow",
           context: @workflow_state["task"],
-          tags: [@workflow_state["workflow_type"], "workflow_step"],
           agent: agent_name,
           code_snippet: ""
         )
@@ -469,7 +468,6 @@ module Agentf
           title: "Architecture review completed",
           description: "Layer violations: #{Array(result['violations']).length}",
           context: @workflow_state["task"],
-          tags: [@workflow_state["workflow_type"], "architecture_review"],
           agent: @name
         )
       rescue Agentf::Memory::RedisMemory::ConfirmationRequired => e
@@ -501,7 +499,6 @@ module Agentf
         title: "Workflow contract #{evaluation['stage']} #{evaluation['ok'] ? 'passed' : 'violated'}",
         description: "mode=#{evaluation['mode']} blocked=#{evaluation['blocked']}",
         context: JSON.generate(evaluation),
-        tags: ["workflow_contract", evaluation["stage"], evaluation["ok"] ? "pass" : "violation"],
         agent: @name,
         metadata: { "workflow_contract_event" => true }
       )
@@ -519,12 +516,12 @@ module Agentf
       policy_violations.each do |violation|
         begin
           @memory.store_episode(
-            type: "pitfall",
+            type: "episode",
             title: "Agent policy violation: #{violation['code']}",
             description: violation["message"],
             context: @workflow_state["task"],
-            tags: ["agent_policy", violation["agent"].to_s.downcase],
             agent: @name,
+            outcome: "negative",
             metadata: { "policy_violation" => true, "severity" => violation["severity"] }
           )
         rescue Agentf::Memory::RedisMemory::ConfirmationRequired => e

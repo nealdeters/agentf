@@ -15,19 +15,19 @@ RSpec.describe Agentf::CLI::Memory do
         "count" => 1,
         "memories" => [
           {
-            "type" => "success",
-            "title" => "Example success",
+            "type" => "episode",
+            "title" => "Example episode",
             "created_at" => "2026-03-02 12:00:00",
             "description" => "Did the thing",
             "agent" => "QA_TESTER",
-            "code_snippet" => nil,
-            "tags" => %w[testing example]
+            "outcome" => "positive",
+            "code_snippet" => nil
           }
         ]
       )
 
       expect { cli.run(["recent"]) }
-        .to output(include("[SUCCESS] Example success"))
+        .to output(include("[EPISODE] Example episode").and(include("Outcome: positive")))
         .to_stdout
     end
 
@@ -60,37 +60,26 @@ RSpec.describe Agentf::CLI::Memory do
       allow(reviewer).to receive(:get_summary).and_return(
         "project" => "test-project",
         "total_memories" => 3,
-        "by_type" => { "pitfall" => 1, "lesson" => 1, "success" => 1 },
-        "by_agent" => { "QA_TESTER" => 2, "INCIDENT_RESPONDER" => 1 },
-        "unique_tags" => 4
+        "by_type" => { "episode" => 1, "lesson" => 1, "playbook" => 1 },
+        "by_outcome" => { "positive" => 1, "negative" => 1, "neutral" => 0 },
+        "by_agent" => { "QA_TESTER" => 2, "INCIDENT_RESPONDER" => 1 }
       )
 
       expect { cli.run(["summary"]) }
-        .to output(include("Memory Summary for project: test-project"))
+        .to output(include("Memory Summary for project: test-project").and(include("By outcome:")))
         .to_stdout
     end
   end
 
-  describe "list tags command" do
-    it "prints tags when present" do
-      allow(reviewer).to receive(:get_all_tags).and_return(
-        "tags" => %w[ci testing],
-        "count" => 2
+  describe "episode commands" do
+    it "lists episodes with outcome filter" do
+      allow(reviewer).to receive(:get_episodes).with(limit: 10, outcome: "negative").and_return(
+        "count" => 1,
+        "memories" => [{ "type" => "episode", "title" => "Deploy failed", "created_at" => "2026-03-02 12:00:00", "description" => "Missing env", "agent" => "ENGINEER", "outcome" => "negative" }]
       )
 
-      expect { cli.run(["tags"]) }
-        .to output(include("Tags (2):"))
-        .to_stdout
-    end
-
-    it "handles empty tags" do
-      allow(reviewer).to receive(:get_all_tags).and_return(
-        "tags" => [],
-        "count" => 0
-      )
-
-      expect { cli.run(["tags"]) }
-        .to output(include("No tags found."))
+      expect { cli.run(["episodes", "--outcome=negative"]) }
+        .to output(include("[EPISODE] Deploy failed"))
         .to_stdout
     end
   end
@@ -107,7 +96,6 @@ RSpec.describe Agentf::CLI::Memory do
             "description" => "Prioritize uptime",
             "agent" => "ORCHESTRATOR",
             "code_snippet" => nil,
-            "tags" => ["ops"],
             "created_at_unix" => 1
           }
         ]
@@ -126,7 +114,6 @@ RSpec.describe Agentf::CLI::Memory do
           "add-business-intent",
           "Reliability",
           "Prioritize uptime",
-          "--tags=ops,platform",
           "--constraints=No downtime;No lock-in",
           "--priority=2"
         ])
@@ -148,6 +135,20 @@ RSpec.describe Agentf::CLI::Memory do
       end.to output(include("Stored feature intent: episode_efgh")).to_stdout
     end
 
+    it "stores playbook memory" do
+      allow(memory).to receive(:store_playbook).and_return("episode_playbook")
+
+      expect do
+        cli.run([
+          "add-playbook",
+          "Release rollout",
+          "Safe deploy sequence",
+          "--steps=deploy canary;monitor;promote",
+          "--feature-area=release"
+        ])
+      end.to output(include("Stored playbook: episode_playbook")).to_stdout
+    end
+
     it "stores lesson memory" do
       allow(memory).to receive(:store_episode).and_return("episode_lesson")
 
@@ -157,36 +158,9 @@ RSpec.describe Agentf::CLI::Memory do
           "New learning",
           "Use provider adapters",
           "--agent=PLANNER",
-          "--tags=architecture,learning",
           "--context=planning"
         ])
       end.to output(include("Stored lesson: episode_lesson")).to_stdout
-    end
-
-    it "stores success memory" do
-      allow(memory).to receive(:store_episode).and_return("episode_success")
-
-      expect do
-        cli.run([
-          "add-success",
-          "Install succeeded",
-          "Wrote provider manifests",
-          "--agent=ENGINEER"
-        ])
-      end.to output(include("Stored success: episode_success")).to_stdout
-    end
-
-    it "stores pitfall memory" do
-      allow(memory).to receive(:store_episode).and_return("episode_pitfall")
-
-      expect do
-        cli.run([
-          "add-pitfall",
-          "Bad provider value",
-          "Unknown provider caused failure",
-          "--agent=ORCHESTRATOR"
-        ])
-      end.to output(include("Stored pitfall: episode_pitfall")).to_stdout
     end
 
     it "stores lesson memory with JSON output"  , :aggregate_failures do
@@ -295,13 +269,13 @@ RSpec.describe Agentf::CLI::Memory do
         .to_stdout
     end
 
-    it "accepts feature_intent type (finding #11 fix)" do
-      allow(reviewer).to receive(:get_by_type).with("feature_intent", limit: 10).and_return(
+    it "accepts playbook type" do
+      allow(reviewer).to receive(:get_by_type).with("playbook", limit: 10).and_return(
         "count" => 0,
         "memories" => []
       )
 
-      expect { cli.run(["by-type", "feature_intent"]) }
+      expect { cli.run(["by-type", "playbook"]) }
         .to output(include("No memories found."))
         .to_stdout
     end
@@ -314,7 +288,7 @@ RSpec.describe Agentf::CLI::Memory do
   describe "help command" do
     it "prints help text (finding #6 fix)" do
       expect { cli.run(["help"]) }
-        .to output(include("Usage: agentf memory <command>"))
+        .to output(include("Usage: agentf memory <command>").and(include("add-playbook")))
         .to_stdout
     end
   end

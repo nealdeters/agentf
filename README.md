@@ -34,6 +34,10 @@ agentf version
 agentf help
 ```
 
+If you use GitHub Copilot in VS Code, `agentf install --provider=copilot --scope=local`
+also writes `.vscode/mcp.json` so Copilot can start the local `agentf mcp-server`
+and discover tools like `agentf-memory-recent`.
+
 ## 60-second quick start
 
 Set environment variables (or create a `.env` file). Example:
@@ -88,6 +92,21 @@ agentf <command> help
 - `AGENTF_AGENT_CONTRACT_MODE` per-agent mode: `advisory|enforcing|off` (default: `enforcing`)
 - `AGENTF_GEM_PATH` optional gem root hint for OpenCode plugin binary resolution
 
+## Memory retrieval
+
+- Episodic memory is stored as `episode` records with an `outcome` such as `positive`, `negative`, or `neutral`
+- `lesson` remains distilled memory, and `playbook` remains procedural memory
+- `agentf memory search` uses embedding-based semantic retrieval
+- When Redis Stack supports vector fields and KNN queries, Agentf uses native RediSearch vector search for episodic candidate retrieval
+- If vector indexing is unavailable, Agentf automatically falls back to semantic scan/rerank over stored embeddings
+
+## Copilot MCP notes
+
+- VS Code Copilot discovers local MCP tools from `.vscode/mcp.json`
+- `agentf install --provider=copilot --scope=local` now writes that file with an `agentf` stdio server entry
+- After install, start or restart the server from VS Code with `MCP: List Servers`, or open `.vscode/mcp.json` and use the Start action
+- In Copilot Chat, use Agent mode and confirm the `agentf` server is trusted/running before testing tool calls
+
 If Redis requires auth, include credentials in `REDIS_URL` (example: `redis://:password@localhost:6379`).
 
 ## Docs
@@ -129,7 +148,7 @@ Useful commands:
 
 ```bash
 agentf eval list
-agentf eval run engineer_store_success
+agentf eval run engineer_episode_positive
 agentf eval run engineer_confirmation_retry
 agentf eval run mcp_add_lesson
 agentf eval run provider_install_opencode

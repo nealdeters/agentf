@@ -3,7 +3,7 @@
 RSpec.describe Agentf::Agents::Designer do
   ComponentSpec = Struct.new(:name, :framework, :code)
 
-  let(:memory) { instance_double(Agentf::Memory::RedisMemory, store_success: nil) }
+  let(:memory) { instance_double(Agentf::Memory::RedisMemory, store_episode: nil) }
   let(:commands) { instance_double(Agentf::Commands::Designer) }
 
   subject(:agent) { described_class.new(memory, commands: commands) }

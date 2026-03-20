@@ -10,17 +10,23 @@ module Agentf
   module Memory
     # Redis-backed memory system for agent learning
     class RedisMemory
+      EPISODIC_INDEX = "episodic:logs"
       EDGE_INDEX = "edge:links"
+      DEFAULT_SEMANTIC_SCAN_LIMIT = 200
+      VECTOR_DIMENSIONS = defined?(Agentf::EmbeddingProvider::DIMENSIONS) ? Agentf::EmbeddingProvider::DIMENSIONS : 64
 
       attr_reader :project
 
-      def initialize(redis_url: nil, project: nil)
+      def initialize(redis_url: nil, project: nil, embedding_provider: Agentf::EmbeddingProvider.new)
         @redis_url = redis_url || Agentf.config.redis_url
         @project = project || Agentf.config.project_name
+        @embedding_provider = embedding_provider
         @client = Redis.new(client_options)
         @json_supported = detect_json_support
         @search_supported = detect_search_support
+        @vector_search_supported = false
         ensure_indexes if @search_supported
+        @vector_search_supported = detect_vector_search_support if @search_supported
       end
 
       # Raised when a write requires explicit user confirmation (ask_first).
@@ -54,7 +60,8 @@ module Agentf
         task_id
       end
 
-      def store_episode(type:, title:, description:, context: "", code_snippet: "", tags: [], agent: Agentf::AgentRoles::ORCHESTRATOR,
+      def store_episode(type:, title:, description:, context: "", code_snippet: "", agent: Agentf::AgentRoles::ORCHESTRATOR,
+                        outcome: nil, embedding: nil,
                         related_task_id: nil, metadata: {}, entity_ids: [], relationships: [], parent_episode_id: nil, causal_from: nil, confirm: nil)
         # Determine persistence preference from the agent's policy boundaries.
         # Precedence: never > ask_first > always > none.
@@ -87,22 +94,28 @@ module Agentf
           metadata: metadata,
           agent: agent,
           type: type,
-          tags: tags,
           entity_ids: entity_ids,
           relationships: relationships,
           parent_episode_id: parent_episode_id,
-          causal_from: causal_from
+          causal_from: causal_from,
+          outcome: outcome
         )
+        supplied_embedding = parse_embedding(embedding)
+        embedding_vector = if supplied_embedding.any?
+                             normalize_vector_dimensions(supplied_embedding)
+                           else
+                             embed_text(episode_embedding_text(title: title, description: description, context: context, code_snippet: code_snippet, metadata: normalized_metadata))
+                           end
 
         data = {
           "id" => episode_id,
           "type" => type,
+          "outcome" => normalize_outcome(outcome),
           "title" => title,
           "description" => description,
           "project" => @project,
           "context" => context,
           "code_snippet" => code_snippet,
-          "tags" => tags,
           "created_at" => Time.now.to_i,
           "agent" => agent,
           "related_task_id" => related_task_id || "",
@@ -110,7 +123,8 @@ module Agentf
           "relationships" => relationships,
           "parent_episode_id" => parent_episode_id.to_s,
           "causal_from" => causal_from.to_s,
-          "metadata" => normalized_metadata
+          "metadata" => normalized_metadata,
+          "embedding" => embedding_vector
         }
 
         key = "episodic:#{episode_id}"
@@ -136,63 +150,34 @@ module Agentf
           related_task_id: related_task_id,
           relationships: relationships,
           metadata: normalized_metadata,
-          tags: tags,
           agent: agent
         )
 
         episode_id
       end
 
-       def store_success(title:, description:, context: "", code_snippet: "", tags: [], agent: Agentf::AgentRoles::ORCHESTRATOR, confirm: nil)
+       def store_lesson(title:, description:, context: "", code_snippet: "", agent: Agentf::AgentRoles::ORCHESTRATOR, confirm: nil)
          store_episode(
-          type: "success",
-          title: title,
-          description: description,
-          context: context,
-          code_snippet: code_snippet,
-          tags: tags,
-           agent: agent,
-           confirm: confirm
-        )
-      end
+           type: "lesson",
+           title: title,
+           description: description,
+           context: context,
+           code_snippet: code_snippet,
+            agent: agent,
+            confirm: confirm
+         )
+       end
 
-       def store_pitfall(title:, description:, context: "", code_snippet: "", tags: [], agent: Agentf::AgentRoles::ORCHESTRATOR, confirm: nil)
-         store_episode(
-          type: "pitfall",
-          title: title,
-          description: description,
-          context: context,
-          code_snippet: code_snippet,
-          tags: tags,
-           agent: agent,
-           confirm: confirm
-        )
-      end
-
-       def store_lesson(title:, description:, context: "", code_snippet: "", tags: [], agent: Agentf::AgentRoles::ORCHESTRATOR, confirm: nil)
-         store_episode(
-          type: "lesson",
-          title: title,
-          description: description,
-          context: context,
-          code_snippet: code_snippet,
-          tags: tags,
-           agent: agent,
-           confirm: confirm
-        )
-      end
-
-      def store_business_intent(title:, description:, constraints: [], tags: [], agent: Agentf::AgentRoles::ORCHESTRATOR, priority: 1, confirm: nil)
+      def store_business_intent(title:, description:, constraints: [], agent: Agentf::AgentRoles::ORCHESTRATOR, priority: 1, confirm: nil)
         context = constraints.any? ? "Constraints: #{constraints.join('; ')}" : ""
 
          store_episode(
           type: "business_intent",
-          title: title,
-          description: description,
-          context: context,
-          tags: tags,
-           agent: agent,
-           confirm: confirm,
+           title: title,
+           description: description,
+           context: context,
+            agent: agent,
+            confirm: confirm,
           metadata: {
             "intent_kind" => "business",
             "constraints" => constraints,
@@ -201,7 +186,7 @@ module Agentf
         )
       end
 
-      def store_feature_intent(title:, description:, acceptance_criteria: [], non_goals: [], tags: [], agent: Agentf::AgentRoles::PLANNER,
+      def store_feature_intent(title:, description:, acceptance_criteria: [], non_goals: [], agent: Agentf::AgentRoles::PLANNER,
                                 related_task_id: nil, confirm: nil)
         context_parts = []
         context_parts << "Acceptance: #{acceptance_criteria.join('; ')}" if acceptance_criteria.any?
@@ -209,12 +194,11 @@ module Agentf
 
          store_episode(
           type: "feature_intent",
-          title: title,
-          description: description,
-          context: context_parts.join(" | "),
-          tags: tags,
-          agent: agent,
-           confirm: confirm,
+           title: title,
+           description: description,
+           context: context_parts.join(" | "),
+           agent: agent,
+            confirm: confirm,
           related_task_id: related_task_id,
           metadata: {
             "intent_kind" => "feature",
@@ -224,14 +208,13 @@ module Agentf
         )
       end
 
-      def store_incident(title:, description:, root_cause: "", resolution: "", tags: [], agent: Agentf::AgentRoles::INCIDENT_RESPONDER,
+      def store_incident(title:, description:, root_cause: "", resolution: "", agent: Agentf::AgentRoles::INCIDENT_RESPONDER,
                          business_capability: nil, confirm: nil)
         store_episode(
           type: "incident",
           title: title,
           description: description,
           context: ["Root cause: #{root_cause}", "Resolution: #{resolution}"].reject { |entry| entry.end_with?(": ") }.join(" | "),
-          tags: tags,
           agent: agent,
           confirm: confirm,
           metadata: {
@@ -243,13 +226,12 @@ module Agentf
         )
       end
 
-      def store_playbook(title:, description:, steps: [], tags: [], agent: Agentf::AgentRoles::PLANNER, feature_area: nil, confirm: nil)
+      def store_playbook(title:, description:, steps: [], agent: Agentf::AgentRoles::PLANNER, feature_area: nil, confirm: nil)
         store_episode(
           type: "playbook",
           title: title,
           description: description,
           context: steps.any? ? "Steps: #{steps.join('; ')}" : "",
-          tags: tags,
           agent: agent,
           confirm: confirm,
           metadata: {
@@ -312,13 +294,18 @@ module Agentf
       end
 
       def get_relevant_context(agent:, query_embedding: nil, task_type: nil, limit: 8)
-        get_agent_context(agent: agent, query_embedding: query_embedding, task_type: task_type, limit: limit)
+        get_agent_context(agent: agent, query_embedding: query_embedding, query_text: nil, task_type: task_type, limit: limit)
       end
 
-      def get_agent_context(agent:, query_embedding: nil, task_type: nil, limit: 8)
+      def get_agent_context(agent:, query_embedding: nil, query_text: nil, task_type: nil, limit: 8)
         profile = context_profile(agent)
-        candidates = get_recent_memories(limit: [limit * 8, 200].min)
-        ranked = rank_memories(candidates: candidates, agent: agent, profile: profile)
+        query_vector = normalized_query_embedding(query_embedding: query_embedding, query_text: query_text)
+        candidates = if vector_search_supported? && query_vector.any?
+                       vector_search_candidates(query_embedding: query_vector, limit: DEFAULT_SEMANTIC_SCAN_LIMIT)
+                     else
+                       collect_episode_records(scope: "project").sort_by { |mem| -(mem["created_at"] || 0) }.first(DEFAULT_SEMANTIC_SCAN_LIMIT)
+                     end
+        ranked = rank_memories(candidates: candidates, agent: agent, profile: profile, query_embedding: query_vector)
 
         {
           "agent" => agent,
@@ -329,12 +316,11 @@ module Agentf
         }
       end
 
-      def get_pitfalls(limit: 10)
-        if @search_supported
-          search_episodic(query: "@type:pitfall @project:{#{@project}}", limit: limit)
-        else
-          fetch_memories_without_search(limit: [limit * 4, 100].min).select { |mem| mem["type"] == "pitfall" }.first(limit)
-        end
+      def get_episodes(limit: 10, outcome: nil)
+        memories = fetch_memories_without_search(limit: [limit * 8, DEFAULT_SEMANTIC_SCAN_LIMIT].min)
+        memories = memories.select { |mem| mem["type"] == "episode" }
+        memories = memories.select { |mem| mem["outcome"].to_s == normalize_outcome(outcome) } if outcome
+        memories.first(limit)
       end
 
       def get_recent_memories(limit: 10)
@@ -343,16 +329,6 @@ module Agentf
         else
           fetch_memories_without_search(limit: limit)
         end
-      end
-
-      def get_all_tags
-        memories = get_recent_memories(limit: 100)
-        all_tags = Set.new
-        memories.each do |mem|
-          tags = mem["tags"]
-          all_tags.merge(tags) if tags.is_a?(Array)
-        end
-        all_tags.to_a
       end
 
       def delete_memory_by_id(id:, scope: "project", dry_run: false)
@@ -417,7 +393,7 @@ module Agentf
         )
       end
 
-      def store_edge(source_id:, target_id:, relation:, weight: 1.0, tags: [], agent: Agentf::AgentRoles::ORCHESTRATOR, metadata: {})
+      def store_edge(source_id:, target_id:, relation:, weight: 1.0, agent: Agentf::AgentRoles::ORCHESTRATOR, metadata: {})
         edge_id = "edge_#{SecureRandom.hex(5)}"
         data = {
           "id" => edge_id,
@@ -425,7 +401,6 @@ module Agentf
           "target_id" => target_id,
           "relation" => relation,
           "weight" => weight.to_f,
-          "tags" => tags,
           "project" => @project,
           "agent" => agent,
           "metadata" => metadata,
@@ -477,34 +452,12 @@ module Agentf
       end
 
       def create_episodic_index
-        @client.call(
-          "FT.CREATE", "episodic:logs",
-          "ON", "JSON",
-          "PREFIX", "1", "episodic:",
-          "SCHEMA",
-          "$.id", "AS", "id", "TEXT",
-          "$.type", "AS", "type", "TEXT",
-          "$.title", "AS", "title", "TEXT",
-          "$.description", "AS", "description", "TEXT",
-          "$.project", "AS", "project", "TAG",
-          "$.context", "AS", "context", "TEXT",
-          "$.code_snippet", "AS", "code_snippet", "TEXT",
-          "$.tags", "AS", "tags", "TAG",
-          "$.created_at", "AS", "created_at", "NUMERIC",
-          "$.agent", "AS", "agent", "TEXT",
-          "$.related_task_id", "AS", "related_task_id", "TEXT",
-          "$.metadata.intent_kind", "AS", "intent_kind", "TAG",
-          "$.metadata.priority", "AS", "priority", "NUMERIC",
-          "$.metadata.confidence", "AS", "confidence", "NUMERIC",
-          "$.metadata.business_capability", "AS", "business_capability", "TAG",
-          "$.metadata.feature_area", "AS", "feature_area", "TAG",
-          "$.metadata.agent_role", "AS", "agent_role", "TAG",
-          "$.metadata.division", "AS", "division", "TAG",
-          "$.metadata.specialty", "AS", "specialty", "TAG",
-          "$.entity_ids[*]", "AS", "entity_ids", "TAG",
-          "$.parent_episode_id", "AS", "parent_episode_id", "TEXT",
-          "$.causal_from", "AS", "causal_from", "TEXT"
-        )
+        @client.call("FT.CREATE", EPISODIC_INDEX, *episodic_index_schema(include_vector: true))
+      rescue Redis::CommandError => e
+        raise if index_already_exists?(e)
+        raise unless vector_query_unsupported?(e)
+
+        @client.call("FT.CREATE", EPISODIC_INDEX, *episodic_index_schema(include_vector: false))
       end
 
       def create_edge_index
@@ -520,38 +473,19 @@ module Agentf
           "$.project", "AS", "project", "TAG",
           "$.agent", "AS", "agent", "TAG",
           "$.weight", "AS", "weight", "NUMERIC",
-          "$.created_at", "AS", "created_at", "NUMERIC",
-          "$.tags", "AS", "tags", "TAG"
+          "$.created_at", "AS", "created_at", "NUMERIC"
         )
       end
 
       def search_episodic(query:, limit:)
         results = @client.call(
-          "FT.SEARCH", "episodic:logs",
+          "FT.SEARCH", EPISODIC_INDEX,
           query,
           "SORTBY", "created_at", "DESC",
           "LIMIT", "0", limit.to_s
         )
 
-        return [] unless results && results[0] > 0
-
-        memories = []
-        (2...results.length).step(2) do |i|
-          item = results[i]
-          if item.is_a?(Array)
-            item.each_with_index do |part, j|
-              if part == "$" && j + 1 < item.length
-                begin
-                  memory = JSON.parse(item[j + 1])
-                  memories << memory
-                rescue JSON::ParserError
-                  # Skip invalid JSON
-                end
-              end
-            end
-          end
-        end
-        memories
+        parse_search_results(results)
       end
 
       def index_already_exists?(error)
@@ -585,13 +519,35 @@ module Agentf
       end
 
       def detect_search_support
-        @client.call("FT.INFO", "episodic:logs")
+        @client.call("FT.INFO", EPISODIC_INDEX)
         true
       rescue Redis::CommandError => e
         return true if index_missing_error?(e)
         return false if missing_search_module?(e)
 
         raise Redis::CommandError, "Failed to check RediSearch availability: #{e.message}"
+      end
+
+      def detect_vector_search_support
+        return false unless @search_supported
+
+        info = @client.call("FT.INFO", EPISODIC_INDEX)
+        return false unless info.to_s.upcase.include?("VECTOR")
+
+        @client.call(
+          "FT.SEARCH", EPISODIC_INDEX,
+          "*=>[KNN 1 @embedding $query_vector AS vector_distance]",
+          "PARAMS", "2", "query_vector", pack_vector(Array.new(VECTOR_DIMENSIONS, 0.0)),
+          "SORTBY", "vector_distance", "ASC",
+          "RETURN", "2", "$", "vector_distance",
+          "DIALECT", "2",
+          "LIMIT", "0", "1"
+        )
+        true
+      rescue Redis::CommandError => e
+        return false if index_missing_error?(e) || vector_query_unsupported?(e)
+
+        raise Redis::CommandError, "Failed to check Redis vector search availability: #{e.message}"
       end
 
       def index_missing_error?(error)
@@ -634,21 +590,21 @@ module Agentf
       def context_profile(agent)
         case agent.to_s.upcase
         when Agentf::AgentRoles::PLANNER
-          { "preferred_types" => %w[business_intent feature_intent lesson playbook pitfall], "pitfall_penalty" => 0.1 }
+          { "preferred_types" => %w[business_intent feature_intent lesson playbook episode], "negative_outcome_penalty" => 0.1 }
         when Agentf::AgentRoles::ENGINEER
-          { "preferred_types" => %w[playbook success lesson pitfall], "pitfall_penalty" => 0.05 }
+          { "preferred_types" => %w[playbook episode lesson], "negative_outcome_penalty" => 0.05 }
         when Agentf::AgentRoles::QA_TESTER
-          { "preferred_types" => %w[lesson pitfall incident success], "pitfall_penalty" => 0.0 }
+          { "preferred_types" => %w[lesson episode incident], "negative_outcome_penalty" => 0.0 }
         when Agentf::AgentRoles::INCIDENT_RESPONDER
-          { "preferred_types" => %w[incident pitfall lesson], "pitfall_penalty" => 0.0 }
+          { "preferred_types" => %w[incident episode lesson], "negative_outcome_penalty" => 0.0 }
         when Agentf::AgentRoles::SECURITY_REVIEWER
-          { "preferred_types" => %w[pitfall lesson incident], "pitfall_penalty" => 0.0 }
+          { "preferred_types" => %w[episode lesson incident], "negative_outcome_penalty" => 0.0 }
         else
-          { "preferred_types" => %w[lesson pitfall success business_intent feature_intent], "pitfall_penalty" => 0.05 }
+          { "preferred_types" => %w[lesson episode business_intent feature_intent], "negative_outcome_penalty" => 0.05 }
         end
       end
 
-      def rank_memories(candidates:, agent:, profile:)
+      def rank_memories(candidates:, agent:, profile:, query_embedding: nil)
         now = Time.now.to_i
         preferred_types = Array(profile["preferred_types"])
 
@@ -660,17 +616,39 @@ module Agentf
             confidence = metadata.fetch("confidence", 0.6).to_f
             confidence = 0.0 if confidence.negative?
             confidence = 1.0 if confidence > 1.0
+            semantic_score = cosine_similarity(query_embedding, parse_embedding(memory["embedding"]))
 
             type_score = preferred_types.include?(type) ? 1.0 : 0.25
             agent_score = (memory["agent"] == agent || memory["agent"] == Agentf::AgentRoles::ORCHESTRATOR) ? 1.0 : 0.2
             age_seconds = [now - memory.fetch("created_at", now).to_i, 0].max
             recency_score = 1.0 / (1.0 + (age_seconds / 86_400.0))
 
-            pitfall_penalty = type == "pitfall" ? profile.fetch("pitfall_penalty", 0.0).to_f : 0.0
-            memory["rank_score"] = ((0.45 * type_score) + (0.3 * agent_score) + (0.2 * recency_score) + (0.05 * confidence) - pitfall_penalty).round(6)
+            negative_outcome_penalty = memory["outcome"] == "negative" ? profile.fetch("negative_outcome_penalty", 0.0).to_f : 0.0
+            memory["rank_score"] = ((0.4 * semantic_score) + (0.22 * type_score) + (0.18 * agent_score) + (0.15 * recency_score) + (0.05 * confidence) - negative_outcome_penalty).round(6)
             memory
           end
           .sort_by { |memory| -memory["rank_score"] }
+      end
+
+      public def search_memories(query:, limit: 10, type: nil, agent: nil, outcome: nil)
+        query_vector = embed_text(query)
+        candidates = if vector_search_supported? && query_vector.any?
+                       native = vector_search_episodes(query_embedding: query_vector, limit: limit, type: type, agent: agent, outcome: outcome)
+                       native.empty? ? collect_episode_records(scope: "project", type: type, agent: agent) : native
+                     else
+                       collect_episode_records(scope: "project", type: type, agent: agent)
+                     end
+        candidates = candidates.select { |mem| mem["outcome"].to_s == normalize_outcome(outcome) } if outcome
+
+        ranked = candidates.map do |memory|
+          score = cosine_similarity(query_vector, parse_embedding(memory["embedding"]))
+          lexical = lexical_overlap_score(query, memory)
+          next if score <= 0 && lexical <= 0
+
+          memory.merge("score" => ((0.75 * score) + (0.25 * lexical)).round(6))
+        end.compact
+
+        ranked.sort_by { |memory| -memory["score"] }.first(limit)
       end
 
       def load_episode(key)
@@ -705,6 +683,37 @@ module Agentf
         value.map(&:to_f)
       rescue JSON::ParserError
         []
+      end
+
+      def parse_search_results(results)
+        return [] unless results && results[0].to_i.positive?
+
+        records = []
+        (2...results.length).step(2) do |i|
+          item = results[i]
+          next unless item.is_a?(Array)
+
+          record = {}
+          item.each_slice(2) do |field, value|
+            next if value.nil?
+
+            if field == "$"
+              begin
+                payload = JSON.parse(value)
+                record.merge!(payload) if payload.is_a?(Hash)
+              rescue JSON::ParserError
+                record = nil
+                break
+              end
+            else
+              record[field] = value
+            end
+          end
+
+          records << record if record.is_a?(Hash) && record.any?
+        end
+
+        records
       end
 
       def cosine_similarity(a, b)
@@ -752,6 +761,53 @@ module Agentf
           break if cursor == "0"
         end
         memories
+      end
+
+      def vector_search_episodes(query_embedding:, limit:, type: nil, agent: nil, outcome: nil)
+        return [] unless vector_search_supported?
+
+        requested_limit = [limit.to_i, 1].max
+        search_limit = [requested_limit * 4, 10].max
+        filters = ["@project:{#{escape_tag(@project)}}"]
+        normalized_outcome = normalize_outcome(outcome)
+        filters << "@outcome:{#{escape_tag(normalized_outcome)}}" if normalized_outcome
+        base_query = filters.join(" ")
+
+        results = @client.call(
+          "FT.SEARCH", EPISODIC_INDEX,
+          "#{base_query}=>[KNN #{search_limit} @embedding $query_vector AS vector_distance]",
+          "PARAMS", "2", "query_vector", pack_vector(query_embedding),
+          "SORTBY", "vector_distance", "ASC",
+          "RETURN", "2", "$", "vector_distance",
+          "DIALECT", "2",
+          "LIMIT", "0", search_limit.to_s
+        )
+
+        parse_search_results(results)
+          .select do |memory|
+            next false unless memory["project"].to_s == @project.to_s
+            next false unless type.to_s.empty? || memory["type"].to_s == type.to_s
+            next false unless agent.to_s.empty? || memory["agent"].to_s == agent.to_s
+            next false unless normalized_outcome.nil? || memory["outcome"].to_s == normalized_outcome
+
+            true
+          end
+          .each { |memory| memory["vector_distance"] = memory["vector_distance"].to_f if memory.key?("vector_distance") }
+          .first(requested_limit)
+      rescue Redis::CommandError => e
+        if vector_query_unsupported?(e)
+          @vector_search_supported = false
+          return []
+        end
+
+        raise
+      end
+
+      def vector_search_candidates(query_embedding:, limit:)
+        native = vector_search_episodes(query_embedding: query_embedding, limit: limit)
+        return native if native.any?
+
+        collect_episode_records(scope: "project").sort_by { |mem| -(mem["created_at"] || 0) }.first(DEFAULT_SEMANTIC_SCAN_LIMIT)
       end
 
       def collect_related_edge_keys(episode_ids:, scope:)
@@ -850,9 +906,9 @@ module Agentf
         }
       end
 
-      def persist_relationship_edges(episode_id:, related_task_id:, relationships:, metadata:, tags:, agent:)
+      def persist_relationship_edges(episode_id:, related_task_id:, relationships:, metadata:, agent:)
         if related_task_id && !related_task_id.to_s.strip.empty?
-          store_edge(source_id: episode_id, target_id: related_task_id, relation: "relates_to", tags: tags, agent: agent)
+          store_edge(source_id: episode_id, target_id: related_task_id, relation: "relates_to", agent: agent)
         end
 
         Array(relationships).each do |relation|
@@ -867,7 +923,6 @@ module Agentf
             target_id: target,
             relation: relation_type,
             weight: (relation["weight"] || relation[:weight] || 1.0).to_f,
-            tags: tags,
             agent: agent,
             metadata: { "source_metadata" => extract_metadata_slice(metadata, %w[intent_kind agent_role division]) }
           )
@@ -875,30 +930,80 @@ module Agentf
 
         parent = metadata["parent_episode_id"].to_s
         unless parent.empty?
-          store_edge(source_id: episode_id, target_id: parent, relation: "child_of", tags: tags, agent: agent)
+          store_edge(source_id: episode_id, target_id: parent, relation: "child_of", agent: agent)
         end
 
         causal_from = metadata["causal_from"].to_s
         unless causal_from.empty?
-          store_edge(source_id: episode_id, target_id: causal_from, relation: "caused_by", tags: tags, agent: agent)
+          store_edge(source_id: episode_id, target_id: causal_from, relation: "caused_by", agent: agent)
         end
       rescue StandardError
         nil
       end
 
-      def enrich_metadata(metadata:, agent:, type:, tags:, entity_ids:, relationships:, parent_episode_id:, causal_from:)
+      def enrich_metadata(metadata:, agent:, type:, entity_ids:, relationships:, parent_episode_id:, causal_from:, outcome:)
         base = metadata.is_a?(Hash) ? metadata.dup : {}
         base["agent_role"] = agent
         base["division"] = infer_division(agent)
         base["specialty"] = infer_specialty(agent)
         base["capabilities"] = infer_capabilities(agent)
         base["episode_type"] = type
-        base["tag_count"] = Array(tags).length
         base["relationship_count"] = Array(relationships).length
         base["entity_ids"] = Array(entity_ids)
+        base["outcome"] = normalize_outcome(outcome) if outcome
         base["parent_episode_id"] = parent_episode_id.to_s unless parent_episode_id.to_s.empty?
         base["causal_from"] = causal_from.to_s unless causal_from.to_s.empty?
         base
+      end
+
+      def normalized_query_embedding(query_embedding:, query_text:)
+        embedded = parse_embedding(query_embedding)
+        return embedded if embedded.any?
+
+        embed_text(query_text)
+      end
+
+      def episode_embedding_text(title:, description:, context:, code_snippet:, metadata:)
+        [
+          title,
+          description,
+          context,
+          code_snippet,
+          metadata["feature_area"],
+          metadata["business_capability"],
+          metadata["intent_kind"],
+          metadata["resolution"],
+          metadata["root_cause"]
+        ].compact.join("\n")
+      end
+
+      def lexical_overlap_score(query, memory)
+        query_tokens = normalize_tokens(query)
+        return 0.0 if query_tokens.empty?
+
+        memory_tokens = normalize_tokens([memory["title"], memory["description"], memory["context"], memory["code_snippet"]].compact.join(" "))
+        return 0.0 if memory_tokens.empty?
+
+        overlap = (query_tokens & memory_tokens).length
+        overlap.to_f / query_tokens.length.to_f
+      end
+
+      def normalize_tokens(text)
+        text.to_s.downcase.scan(/[a-z0-9_]+/).reject { |token| token.length < 2 }
+      end
+
+      def embed_text(text)
+        @embedding_provider.embed(text)
+      end
+
+      def normalize_outcome(value)
+        normalized = value.to_s.strip.downcase
+        return nil if normalized.empty?
+        return "positive" if %w[positive success succeeded passed pass completed approved].include?(normalized)
+        return "negative" if %w[negative failure failed fail pitfall error blocked violated].include?(normalized)
+        return "neutral" if %w[neutral info informational lesson observation].include?(normalized)
+
+        normalized
       end
 
       # NOTE: previous implementations exposed an `agent_requires_confirmation?`
@@ -1064,24 +1169,7 @@ module Agentf
           "SORTBY", "created_at", "DESC",
           "LIMIT", "0", limit.to_s
         )
-        return [] unless results && results[0] > 0
-
-        records = []
-        (2...results.length).step(2) do |i|
-          item = results[i]
-          next unless item.is_a?(Array)
-
-          item.each_with_index do |part, j|
-            next unless part == "$" && j + 1 < item.length
-
-            begin
-              records << JSON.parse(item[j + 1])
-            rescue JSON::ParserError
-              nil
-            end
-          end
-        end
-        records
+        parse_search_results(results)
       end
 
       def fetch_edges_without_search(node_id:, relation_filters:, limit:)
@@ -1106,6 +1194,65 @@ module Agentf
 
       def escape_tag(value)
         value.to_s.gsub(/[\-{}\[\]|\\]/) { |m| "\\#{m}" }
+      end
+
+      def episodic_index_schema(include_vector:)
+        schema = [
+          "ON", "JSON",
+          "PREFIX", "1", "episodic:",
+          "SCHEMA",
+          "$.id", "AS", "id", "TEXT",
+          "$.type", "AS", "type", "TEXT",
+          "$.outcome", "AS", "outcome", "TAG",
+          "$.title", "AS", "title", "TEXT",
+          "$.description", "AS", "description", "TEXT",
+          "$.project", "AS", "project", "TAG",
+          "$.context", "AS", "context", "TEXT",
+          "$.code_snippet", "AS", "code_snippet", "TEXT",
+          "$.created_at", "AS", "created_at", "NUMERIC",
+          "$.agent", "AS", "agent", "TEXT",
+          "$.related_task_id", "AS", "related_task_id", "TEXT",
+          "$.metadata.intent_kind", "AS", "intent_kind", "TAG",
+          "$.metadata.priority", "AS", "priority", "NUMERIC",
+          "$.metadata.confidence", "AS", "confidence", "NUMERIC",
+          "$.metadata.business_capability", "AS", "business_capability", "TAG",
+          "$.metadata.feature_area", "AS", "feature_area", "TAG",
+          "$.metadata.agent_role", "AS", "agent_role", "TAG",
+          "$.metadata.division", "AS", "division", "TAG",
+          "$.metadata.specialty", "AS", "specialty", "TAG",
+          "$.entity_ids[*]", "AS", "entity_ids", "TAG",
+          "$.parent_episode_id", "AS", "parent_episode_id", "TEXT",
+          "$.causal_from", "AS", "causal_from", "TEXT"
+        ]
+
+        return schema unless include_vector
+
+        schema + [
+          "$.embedding", "AS", "embedding", "VECTOR", "FLAT", "6",
+          "TYPE", "FLOAT32",
+          "DIM", VECTOR_DIMENSIONS.to_s,
+          "DISTANCE_METRIC", "COSINE"
+        ]
+      end
+
+      def vector_search_supported?
+        @search_supported && @vector_search_supported
+      end
+
+      def normalize_vector_dimensions(vector)
+        values = Array(vector).map(&:to_f).first(VECTOR_DIMENSIONS)
+        values.fill(0.0, values.length...VECTOR_DIMENSIONS)
+      end
+
+      def pack_vector(vector)
+        normalize_vector_dimensions(vector).pack("e*")
+      end
+
+      def vector_query_unsupported?(error)
+        message = error.message.to_s.downcase
+        return false if message.empty?
+
+        message.include?("vector") || message.include?("knn") || message.include?("dialect") || message.include?("syntax error")
       end
 
       def extract_metadata_slice(metadata, keys)

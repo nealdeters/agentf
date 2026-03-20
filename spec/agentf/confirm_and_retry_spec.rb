@@ -11,11 +11,9 @@ RSpec.describe "confirm and retry flow" do
     memory = double(
       "memory",
       get_recent_memories: [],
-      get_pitfalls: [],
+      get_episodes: [],
       get_agent_context: {},
       store_episode: nil,
-      store_success: nil,
-      store_pitfall: nil,
       store_lesson: nil,
       get_relevant_context: {}
     )

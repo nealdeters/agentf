@@ -75,7 +75,7 @@ module Agentf
           Usage: agentf <command> [subcommand] [options]
 
           Commands:
-            memory       Manage agent memory (lessons, pitfalls, successes, intents)
+            memory       Manage agent memory (episodes, lessons, playbooks, intents)
             code         Explore codebase (glob, grep, tree, related files)
             metrics      Show workflow success and provider parity metrics
             architecture Analyze architecture layers and violations

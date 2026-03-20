@@ -17,9 +17,9 @@ RSpec.describe Agentf::Memory::RedisMemory do
     metadata = { "parent_episode_id" => "p1", "causal_from" => "c1", "intent_kind" => "business" }
     relationships = [{ "to" => "t1", "type" => "reltype", "weight" => 2 }, { to: "t2" }]
 
-    memory.send(:persist_relationship_edges, episode_id: "e1", related_task_id: "rt1", relationships: relationships, metadata: metadata, tags: ["a"], agent: Agentf::AgentRoles::ORCHESTRATOR)
+    memory.send(:persist_relationship_edges, episode_id: "e1", related_task_id: "rt1", relationships: relationships, metadata: metadata, agent: Agentf::AgentRoles::ORCHESTRATOR)
 
-    expect(memory).to have_received(:store_edge).with(source_id: "e1", target_id: "rt1", relation: "relates_to", tags: ["a"], agent: Agentf::AgentRoles::ORCHESTRATOR).once
+    expect(memory).to have_received(:store_edge).with(source_id: "e1", target_id: "rt1", relation: "relates_to", agent: Agentf::AgentRoles::ORCHESTRATOR).once
     expect(memory).to have_received(:store_edge).with(hash_including(source_id: "e1", target_id: "t1", relation: "reltype")).once
     expect(memory).to have_received(:store_edge).with(hash_including(source_id: "e1", target_id: "p1", relation: "child_of")).once
     expect(memory).to have_received(:store_edge).with(hash_including(source_id: "e1", target_id: "c1", relation: "caused_by")).once

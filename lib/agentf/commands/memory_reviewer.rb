@@ -12,14 +12,11 @@ module Agentf
       def self.manifest
         {
           "name" => NAME,
-          "description" => "Review and query Redis-stored memories, pitfalls, and learnings.",
+          "description" => "Review and query Redis-stored memories, episodes, and learnings.",
           "commands" => [
             { "name" => "get_recent_memories", "type" => "function" },
-            { "name" => "get_pitfalls", "type" => "function" },
+            { "name" => "get_episodes", "type" => "function" },
             { "name" => "get_lessons", "type" => "function" },
-            { "name" => "get_successes", "type" => "function" },
-            { "name" => "get_all_tags", "type" => "function" },
-            { "name" => "get_by_tag", "type" => "function" },
             { "name" => "get_by_type", "type" => "function" },
             { "name" => "get_by_agent", "type" => "function" },
             { "name" => "search", "type" => "function" },
@@ -44,10 +41,9 @@ module Agentf
         { "error" => e.message }
       end
 
-      # Get all pitfalls (things that went wrong)
-      def get_pitfalls(limit: 10)
-        pitfalls = @memory.get_pitfalls(limit: limit)
-        format_memories(pitfalls)
+      def get_episodes(limit: 10, outcome: nil)
+        episodes = @memory.get_episodes(limit: limit, outcome: outcome)
+        format_memories(episodes)
       rescue => e
         { "error" => e.message }
       end
@@ -56,14 +52,6 @@ module Agentf
       def get_lessons(limit: 10)
         lessons = @memory.get_memories_by_type(type: "lesson", limit: limit)
         format_memories(lessons)
-      rescue => e
-        { "error" => e.message }
-      end
-
-      # Get all successes
-      def get_successes(limit: 10)
-        successes = @memory.get_memories_by_type(type: "success", limit: limit)
-        format_memories(successes)
       rescue => e
         { "error" => e.message }
       end
@@ -89,28 +77,10 @@ module Agentf
         { "error" => e.message }
       end
 
-      # Get all unique tags from memories
-      def get_all_tags
-        tags = @memory.get_all_tags
-        { "tags" => tags.sort, "count" => tags.length }
-      rescue => e
-        { "error" => e.message }
-      end
-
-      # Get memories by tag
-      def get_by_tag(tag, limit: 10)
-        memories = @memory.get_recent_memories(limit: 100)
-        filtered = memories.select { |m| m["tags"]&.include?(tag) }
-        format_memories(filtered.first(limit))
-      rescue => e
-        { "error" => e.message }
-      end
-
       # Get memories by type (pitfall, lesson, success)
       def get_by_type(type, limit: 10)
-        memories = @memory.get_recent_memories(limit: 100)
-        filtered = memories.select { |m| m["type"] == type }
-        format_memories(filtered.first(limit))
+        memories = @memory.get_memories_by_type(type: type, limit: limit)
+        format_memories(memories)
       rescue => e
         { "error" => e.message }
       end
@@ -126,14 +96,7 @@ module Agentf
 
       # Search memories by keyword in title or description
       def search(query, limit: 10)
-        memories = @memory.get_recent_memories(limit: 100)
-        q = query.downcase
-        filtered = memories.select do |m|
-          m["title"]&.downcase&.include?(q) ||
-            m["description"]&.downcase&.include?(q) ||
-            m["context"]&.downcase&.include?(q)
-        end
-        format_memories(filtered.first(limit))
+        format_memories(@memory.search_memories(query: query, limit: limit))
       rescue => e
         { "error" => e.message }
       end
@@ -141,19 +104,22 @@ module Agentf
       # Get summary statistics
       def get_summary
         memories = @memory.get_recent_memories(limit: 100)
-        tags = @memory.get_all_tags
 
         {
           "total_memories" => memories.length,
           "by_type" => {
-            "pitfall" => memories.count { |m| m["type"] == "pitfall" },
+            "episode" => memories.count { |m| m["type"] == "episode" },
             "lesson" => memories.count { |m| m["type"] == "lesson" },
-            "success" => memories.count { |m| m["type"] == "success" },
+            "playbook" => memories.count { |m| m["type"] == "playbook" },
             "business_intent" => memories.count { |m| m["type"] == "business_intent" },
             "feature_intent" => memories.count { |m| m["type"] == "feature_intent" }
           },
+          "by_outcome" => {
+            "positive" => memories.count { |m| m["outcome"] == "positive" },
+            "negative" => memories.count { |m| m["outcome"] == "negative" },
+            "neutral" => memories.count { |m| m["outcome"] == "neutral" }
+          },
           "by_agent" => memories.each_with_object(Hash.new(0)) { |m, h| h[m["agent"]] += 1 },
-          "unique_tags" => tags.length,
           "project" => @project
         }
       rescue => e
@@ -189,7 +155,7 @@ module Agentf
           "description" => m["description"],
           "context" => m["context"],
           "code_snippet" => m["code_snippet"],
-          "tags" => m["tags"],
+          "outcome" => m["outcome"],
           "agent" => m["agent"],
           "metadata" => m["metadata"],
           "entity_ids" => m["entity_ids"],

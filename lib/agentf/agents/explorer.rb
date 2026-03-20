@@ -63,12 +63,11 @@ module Agentf
 
         files = @commands.glob(query, file_types: nil)
 
-        res = safe_memory_write(attempted: { action: "store_lesson", title: "Research finding: #{query}", tags: ["research", "exploration"], agent: name }) do
+        res = safe_memory_write(attempted: { action: "store_lesson", title: "Research finding: #{query}", agent: name }) do
           memory.store_lesson(
             title: "Research finding: #{query}",
             description: "Found #{files.size} relevant files during exploration",
             context: "Search pattern: #{file_pattern || 'all files'}",
-            tags: ["research", "exploration"],
             agent: name
           )
         end

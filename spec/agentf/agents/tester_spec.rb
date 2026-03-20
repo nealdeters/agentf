@@ -16,7 +16,7 @@ RSpec.describe Agentf::Agents::Tester do
 
   it "generates tests and stores success"  , :aggregate_failures do
     # Simulate successful persistence by returning an episode id
-    allow(memory).to receive(:store_success).and_return("episode_ok")
+    allow(memory).to receive(:store_episode).and_return("episode_ok")
     res = agent.generate_tests("app/models/user.rb")
 
     expect(res["test_file"]).to eq("spec/foo_spec.rb")
@@ -25,7 +25,7 @@ RSpec.describe Agentf::Agents::Tester do
 
   it "returns confirmation_required when memory requires confirmation"  , :aggregate_failures do
     confirmation = Agentf::Memory::RedisMemory::ConfirmationRequired.new("confirm", { reason: "ask_first" })
-    allow(memory).to receive(:store_success).and_raise(confirmation)
+    allow(memory).to receive(:store_episode).and_raise(confirmation)
 
     res = agent.generate_tests("app/models/user.rb")
     expect(res["confirmation_required"]).to be(true)

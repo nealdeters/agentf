@@ -32,8 +32,8 @@ module Agentf
 
       def self.memory_concepts
         {
-          "reads" => ["RedisMemory#get_recent_memories", "RedisMemory#get_pitfalls"],
-          "writes" => ["RedisMemory#store_lesson", "RedisMemory#store_success", "RedisMemory#store_pitfall"],
+          "reads" => ["RedisMemory#get_recent_memories", "RedisMemory#get_episodes"],
+          "writes" => ["RedisMemory#store_lesson", "RedisMemory#store_episode", "RedisMemory#store_playbook"],
           "policy" => "Memory is runtime state in Redis and should not be embedded as raw data in manifest markdown."
         }
       end

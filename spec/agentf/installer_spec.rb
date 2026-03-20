@@ -49,12 +49,38 @@ RSpec.describe Agentf::Installer do
 
       agent_manifest = File.join(local_root, ".github/agents/planner.agent.md")
       command_manifest = File.join(local_root, ".github/commands/debugger.md")
+      mcp_config = File.join(local_root, ".vscode/mcp.json")
 
       expect(File).to exist(agent_manifest)
       expect(File).to exist(command_manifest)
+      expect(File).to exist(mcp_config)
       expect(File.read(agent_manifest)).to include("This manifest is a thin pointer.")
       expect(File.read(agent_manifest)).to include("IMPORTANT: Use the `agentf-planner` tool")
       expect(File.read(command_manifest)).to include("This is a thin command manifest")
+      expect(JSON.parse(File.read(mcp_config)).dig("servers", "agentf", "type")).to eq("stdio")
+      expect(JSON.parse(File.read(mcp_config)).dig("servers", "agentf", "command")).to eq("agentf")
+      expect(JSON.parse(File.read(mcp_config)).dig("servers", "agentf", "args")).to eq(["mcp-server"])
+    end
+
+    it "merges copilot mcp.json server entries instead of overwriting"  , :aggregate_failures do
+      existing = {
+        "servers" => {
+          "other" => {
+            "command" => "uvx",
+            "args" => ["mcp-server-fetch"]
+          }
+        }
+      }
+      FileUtils.mkdir_p(File.join(local_root, ".vscode"))
+      File.write(File.join(local_root, ".vscode/mcp.json"), JSON.pretty_generate(existing))
+
+      installer = described_class.new(global_root: global_root, local_root: local_root)
+      installer.install(providers: ["copilot"], scope: "local", only_agents: ["planner"], only_commands: ["debugger"])
+
+      merged = JSON.parse(File.read(File.join(local_root, ".vscode/mcp.json")))
+      expect(merged.dig("servers", "other", "command")).to eq("uvx")
+      expect(merged.dig("servers", "agentf", "command")).to eq("agentf")
+      expect(merged.dig("servers", "agentf", "args")).to eq(["mcp-server"])
     end
 
     it "bootstraps opencode mcp-first helper files by default"  , :aggregate_failures do

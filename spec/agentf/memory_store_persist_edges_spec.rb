@@ -15,7 +15,7 @@ RSpec.describe Agentf::Memory::RedisMemory do
 
     relationships = ["not-a-hash", { "to" => "", "type" => "t" }, { "to" => "ok", "type" => "rel" }]
 
-    memory.send(:persist_relationship_edges, episode_id: "eX", related_task_id: nil, relationships: relationships, metadata: {}, tags: [], agent: Agentf::AgentRoles::ORCHESTRATOR)
+    memory.send(:persist_relationship_edges, episode_id: "eX", related_task_id: nil, relationships: relationships, metadata: {}, agent: Agentf::AgentRoles::ORCHESTRATOR)
 
     # Only the valid hash with non-empty target should have caused a store_edge call
     expect(memory).to have_received(:store_edge).with(hash_including(source_id: "eX", target_id: "ok", relation: "rel")).once
@@ -31,7 +31,7 @@ RSpec.describe Agentf::Memory::RedisMemory do
     allow(memory).to receive(:store_edge).and_raise(StandardError.new("boom"))
 
     # Should not raise despite store_edge raising internally
-    expect { memory.send(:persist_relationship_edges, episode_id: "eX", related_task_id: "rt", relationships: [{ "to" => "t" }], metadata: {}, tags: [], agent: Agentf::AgentRoles::ORCHESTRATOR) }.not_to raise_error
+    expect { memory.send(:persist_relationship_edges, episode_id: "eX", related_task_id: "rt", relationships: [{ "to" => "t" }], metadata: {}, agent: Agentf::AgentRoles::ORCHESTRATOR) }.not_to raise_error
   end
 
   it "raises a Redis::CommandError when JSON.SET fails with a non-missing-json-module error during store_episode" do
@@ -48,7 +48,7 @@ RSpec.describe Agentf::Memory::RedisMemory do
     allow(client).to receive(:call).with("JSON.SET", anything, ".", anything).and_raise(Redis::CommandError.new("Permission denied"))
 
     expect {
-      memory.store_episode(type: "x", title: "t", description: "d", tags: [], agent: Agentf::AgentRoles::ORCHESTRATOR, confirm: true)
+      memory.store_episode(type: "x", title: "t", description: "d", agent: Agentf::AgentRoles::ORCHESTRATOR, confirm: true)
     }.to raise_error(Redis::CommandError, /Failed to persist episode with RedisJSON/)
   end
 end

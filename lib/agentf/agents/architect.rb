@@ -9,7 +9,7 @@ module Agentf
       DESCRIPTION = "Strategy, task decomposition, and memory retrieval."
       COMMANDS = %w[glob read_file memory].freeze
       MEMORY_CONCEPTS = {
-        "reads" => ["get_recent_memories", "get_pitfalls"],
+        "reads" => ["get_recent_memories", "get_episodes"],
         "writes" => [],
         "policy" => "Retrieve relevant memories before planning; do not duplicate runtime memory into static markdown."
       }.freeze
@@ -44,7 +44,7 @@ module Agentf
 
       def self.policy_boundaries
         {
-          "always" => ["Capture constraints before decomposition", "Use recent memories and pitfalls in planning"],
+          "always" => ["Capture constraints before decomposition", "Use recent memories and negative episodes in planning"],
           "ask_first" => ["Changing architectural style from project defaults"],
           "never" => ["Skip task decomposition for non-trivial workflows"],
           "required_inputs" => [],
@@ -57,7 +57,7 @@ module Agentf
 
         # Retrieve relevant memories before planning
         recent = memory.get_recent_memories(limit: 5)
-        pitfalls = memory.get_pitfalls(limit: 3)
+        pitfalls = memory.get_episodes(limit: 3, outcome: "negative")
 
         context = {
           "task" => task,

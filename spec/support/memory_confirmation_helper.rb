@@ -26,11 +26,9 @@ module MemoryConfirmationHelper
   def stub_memory_require_confirmation_double(method_name: :store_feature_intent, return_value: "confirmed", reason: "ask_first")
     memory = double("memory")
     allow(memory).to receive(:get_recent_memories).and_return([])
-    allow(memory).to receive(:get_pitfalls).and_return([])
+    allow(memory).to receive(:get_episodes).and_return([])
     allow(memory).to receive(:get_agent_context).and_return({})
     allow(memory).to receive(:store_episode).and_return(nil)
-    allow(memory).to receive(:store_success).and_return(nil)
-    allow(memory).to receive(:store_pitfall).and_return(nil)
     allow(memory).to receive(:store_lesson).and_return(nil)
     allow(memory).to receive(:get_relevant_context).and_return({})
 

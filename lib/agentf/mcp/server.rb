@@ -176,6 +176,7 @@ module Agentf
       end
 
       KNOWN_TOOLS = %w[
+        agentf-mcp-list-tools
         agentf-code-glob
         agentf-code-grep
         agentf-code-tree
@@ -183,29 +184,24 @@ module Agentf
         agentf-architecture-analyze-layers
         agentf-memory-recent
         agentf-memory-search
-        agentf-memory-by-tag
         agentf-memory-by-agent
         agentf-memory-by-type
-        agentf-memory-tags
-        agentf-memory-pitfalls
+        agentf-memory-episodes
         agentf-memory-lessons
-        agentf-memory-successes
         agentf-memory-intents
         agentf-memory-business-intents
         agentf-memory-feature-intents
         agentf-memory-neighbors
         agentf-memory-subgraph
+        agentf-memory-add-playbook
         agentf-memory-add-lesson
-        agentf-memory-add-success
-        agentf-memory-add-pitfall
         agentf-memory-add-business-intent
         agentf-memory-add-feature-intent
       ].freeze
 
       WRITE_TOOLS = Set.new(%w[
+        agentf-memory-add-playbook
         agentf-memory-add-lesson
-        agentf-memory-add-success
-        agentf-memory-add-pitfall
         agentf-memory-add-business-intent
         agentf-memory-add-feature-intent
       ]).freeze
@@ -392,7 +388,7 @@ module Agentf
         end
 
         s.tool("agentf-memory-search") do
-          description "Search memories by keyword."
+          description "Search memories semantically."
           argument :query, String, required: true, description: "Search query"
           argument :limit, Integer, required: false, description: "How many results to return (1-100)"
           call do |args|
@@ -402,13 +398,13 @@ module Agentf
           end
         end
 
-        s.tool("agentf-memory-by-tag") do
-          description "Get memories by tag."
-          argument :tag, String, required: true, description: "Tag to filter"
+        s.tool("agentf-memory-episodes") do
+          description "List episode memories with optional outcome filter."
+          argument :outcome, String, required: false, description: "Optional outcome filter: positive|negative|neutral"
           argument :limit, Integer, required: false, description: "How many results to return (1-100)"
           call do |args|
-            mcp_server.send(:guard!, "agentf-memory-by-tag", **args)
-            result = reviewer.get_by_tag(args[:tag], limit: args[:limit] || 10)
+            mcp_server.send(:guard!, "agentf-memory-episodes", **args)
+            result = reviewer.get_episodes(limit: args[:limit] || 10, outcome: args[:outcome])
             JSON.generate(result)
           end
         end
@@ -435,41 +431,12 @@ module Agentf
           end
         end
 
-        s.tool("agentf-memory-tags") do
-          description "List all unique memory tags."
-          call do |args|
-            mcp_server.send(:guard!, "agentf-memory-tags", **args)
-            result = reviewer.get_all_tags
-            JSON.generate(result)
-          end
-        end
-
-        s.tool("agentf-memory-pitfalls") do
-          description "List pitfall memories."
-          argument :limit, Integer, required: false, description: "How many results to return (1-100)"
-          call do |args|
-            mcp_server.send(:guard!, "agentf-memory-pitfalls", **args)
-            result = reviewer.get_pitfalls(limit: args[:limit] || 10)
-            JSON.generate(result)
-          end
-        end
-
         s.tool("agentf-memory-lessons") do
           description "List lesson memories."
           argument :limit, Integer, required: false, description: "How many results to return (1-100)"
           call do |args|
             mcp_server.send(:guard!, "agentf-memory-lessons", **args)
             result = reviewer.get_lessons(limit: args[:limit] || 10)
-            JSON.generate(result)
-          end
-        end
-
-        s.tool("agentf-memory-successes") do
-          description "List success memories."
-          argument :limit, Integer, required: false, description: "How many results to return (1-100)"
-          call do |args|
-            mcp_server.send(:guard!, "agentf-memory-successes", **args)
-            result = reviewer.get_successes(limit: args[:limit] || 10)
             JSON.generate(result)
           end
         end
@@ -518,7 +485,6 @@ module Agentf
           description "Store a business intent in Redis."
           argument :title, String, required: true, description: "Intent title"
           argument :description, String, required: true, description: "Intent description"
-          argument :tags, Array, required: false, items: String, description: "Tags"
           argument :constraints, Array, required: false, items: String, description: "Constraints"
           argument :priority, Integer, required: false, description: "Priority"
           call do |args|
@@ -529,7 +495,6 @@ module Agentf
                   id = memory.store_business_intent(
                     title: args[:title],
                     description: args[:description],
-                    tags: args[:tags] || [],
                     constraints: args[:constraints] || [],
                     priority: args[:priority] || 1
                   )
@@ -548,7 +513,6 @@ module Agentf
           description "Store a feature intent in Redis."
           argument :title, String, required: true, description: "Intent title"
           argument :description, String, required: true, description: "Intent description"
-          argument :tags, Array, required: false, items: String, description: "Tags"
           argument :acceptance, Array, required: false, items: String, description: "Acceptance criteria"
           argument :non_goals, Array, required: false, items: String, description: "Non-goals"
           argument :related_task_id, String, required: false, description: "Related task id"
@@ -560,7 +524,6 @@ module Agentf
                   id = memory.store_feature_intent(
                     title: args[:title],
                     description: args[:description],
-                    tags: args[:tags] || [],
                     acceptance_criteria: args[:acceptance] || [],
                     non_goals: args[:non_goals] || [],
                     related_task_id: args[:related_task_id]
@@ -612,12 +575,28 @@ module Agentf
           end
         end
 
+        s.tool("agentf-mcp-list-tools") do
+          description "List MCP tools and current guardrail status."
+          call do |_args|
+            # Use guard to ensure the caller is allowed to invoke tools
+            mcp_server.send(:guard!, "agentf-mcp-list-tools", **{})
+
+            tools = s.list_tools
+            guard = {
+              allowed_tools: mcp_server.guardrails[:allowed_tools].to_a,
+              allow_writes: mcp_server.guardrails[:allow_writes],
+              max_arg_length: mcp_server.guardrails[:max_arg_length]
+            }
+
+            JSON.generate({ tools: tools, guardrails: guard })
+          end
+        end
+
         s.tool("agentf-memory-add-lesson") do
           description "Store a lesson memory in Redis."
           argument :title, String, required: true, description: "Lesson title"
           argument :description, String, required: true, description: "Lesson description"
           argument :agent, String, required: false, description: "Agent name"
-          argument :tags, Array, required: false, items: String, description: "Tags"
           argument :context, String, required: false, description: "Context"
           call do |args|
             mcp_server.send(:guard!, "agentf-memory-add-lesson", **args)
@@ -629,7 +608,6 @@ module Agentf
                     title: args[:title],
                     description: args[:description],
                     agent: args[:agent] || Agentf::AgentRoles::ENGINEER,
-                    tags: args[:tags] || [],
                     context: args[:context].to_s,
                     code_snippet: ""
                   )
@@ -650,26 +628,24 @@ module Agentf
           end
         end
 
-        s.tool("agentf-memory-add-success") do
-          description "Store a success memory in Redis."
-          argument :title, String, required: true, description: "Success title"
-          argument :description, String, required: true, description: "Success description"
+        s.tool("agentf-memory-add-playbook") do
+          description "Store a playbook memory in Redis."
+          argument :title, String, required: true, description: "Playbook title"
+          argument :description, String, required: true, description: "Playbook description"
           argument :agent, String, required: false, description: "Agent name"
-          argument :tags, Array, required: false, items: String, description: "Tags"
-          argument :context, String, required: false, description: "Context"
+          argument :steps, Array, required: false, items: String, description: "Ordered playbook steps"
+          argument :feature_area, String, required: false, description: "Feature area"
           call do |args|
-            mcp_server.send(:guard!, "agentf-memory-add-success", **args)
+            mcp_server.send(:guard!, "agentf-memory-add-playbook", **args)
               begin
                 id = nil
-                res = mcp_server.send(:safe_mcp_memory_write, memory, attempted: { tool: "agentf-memory-add-success", args: args }) do
-                  id = memory.store_episode(
-                    type: "success",
+                res = mcp_server.send(:safe_mcp_memory_write, memory, attempted: { tool: "agentf-memory-add-playbook", args: args }) do
+                  id = memory.store_playbook(
                     title: args[:title],
                     description: args[:description],
-                    agent: args[:agent] || Agentf::AgentRoles::ENGINEER,
-                    tags: args[:tags] || [],
-                    context: args[:context].to_s,
-                    code_snippet: ""
+                    agent: args[:agent] || Agentf::AgentRoles::PLANNER,
+                    steps: args[:steps] || [],
+                    feature_area: args[:feature_area]
                   )
                 end
 
@@ -682,45 +658,7 @@ module Agentf
                     confirmation_prompt: res["confirmation_prompt"]
                   )
                 else
-                  JSON.generate(id: id, type: "success", status: "stored")
-                end
-              end
-          end
-        end
-
-        s.tool("agentf-memory-add-pitfall") do
-          description "Store a pitfall memory in Redis."
-          argument :title, String, required: true, description: "Pitfall title"
-          argument :description, String, required: true, description: "Pitfall description"
-          argument :agent, String, required: false, description: "Agent name"
-          argument :tags, Array, required: false, items: String, description: "Tags"
-          argument :context, String, required: false, description: "Context"
-          call do |args|
-            mcp_server.send(:guard!, "agentf-memory-add-pitfall", **args)
-              begin
-                id = nil
-                res = mcp_server.send(:safe_mcp_memory_write, memory, attempted: { tool: "agentf-memory-add-pitfall", args: args }) do
-                  id = memory.store_episode(
-                    type: "pitfall",
-                    title: args[:title],
-                    description: args[:description],
-                    agent: args[:agent] || Agentf::AgentRoles::ENGINEER,
-                    tags: args[:tags] || [],
-                    context: args[:context].to_s,
-                    code_snippet: ""
-                  )
-                end
-
-                if res.is_a?(Hash) && res["confirmation_required"]
-                  JSON.generate(
-                    confirmation_required: true,
-                    confirmation_details: res["confirmation_details"],
-                    attempted: res["attempted"],
-                    confirmed_write_token: res["confirmed_write_token"],
-                    confirmation_prompt: res["confirmation_prompt"]
-                  )
-                else
-                  JSON.generate(id: id, type: "pitfall", status: "stored")
+                  JSON.generate(id: id, type: "playbook", status: "stored")
                 end
               end
           end

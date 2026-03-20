@@ -113,7 +113,7 @@ module Agentf
 
           Examples:
             agentf eval list
-            agentf eval run engineer_store_success
+            agentf eval run engineer_episode_positive
             agentf eval report
             agentf eval run all --json
         HELP

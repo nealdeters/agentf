@@ -11,7 +11,7 @@ module Agentf
       COMMANDS = %w[generate_component validate_design_system].freeze
       MEMORY_CONCEPTS = {
         "reads" => [],
-        "writes" => ["store_success"],
+        "writes" => ["store_episode"],
         "policy" => "Capture successful design implementation patterns."
       }.freeze
 
@@ -64,13 +64,14 @@ module Agentf
 
           spec = @commands.generate_component("GeneratedComponent", design_spec)
 
-          res = safe_memory_write(attempted: { action: "store_success", title: "Implemented design: #{design_spec}", tags: ["design", "ui", framework], agent: name }) do
-            memory.store_success(
+          res = safe_memory_write(attempted: { action: "store_episode", title: "Implemented design: #{design_spec}", outcome: "positive", agent: name }) do
+            memory.store_episode(
+              type: "episode",
               title: "Implemented design: #{design_spec}",
               description: "Created #{spec.name} in #{spec.framework}",
               context: "Framework: #{framework}",
-              tags: ["design", "ui", framework],
-              agent: name
+              agent: name,
+              outcome: "positive"
             )
           end
 

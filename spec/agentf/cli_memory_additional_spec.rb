@@ -12,10 +12,6 @@ RSpec.describe Agentf::CLI::Memory do
       expect { cli.run(["search"]) }.to raise_error(SystemExit)
     end
 
-    it "by_tag exits on missing tag" do
-      expect { cli.run(["by-tag"]) }.to raise_error(SystemExit)
-    end
-
     it "by_agent exits on missing agent" do
       expect { cli.run(["by-agent"]) }.to raise_error(SystemExit)
     end

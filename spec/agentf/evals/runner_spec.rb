@@ -17,11 +17,11 @@ RSpec.describe Agentf::Evals::Runner do
 
   describe "#list" do
     it "discovers scenario metadata from the eval root" do
-      write_scenario("engineer_store_success", agent: "engineer")
+      write_scenario("engineer_episode_positive", agent: "engineer")
 
       scenarios = runner.list
 
-      expect(scenarios.map(&:name)).to eq(["engineer_store_success"])
+      expect(scenarios.map(&:name)).to eq(["engineer_episode_positive"])
       expect(scenarios.first.agent).to eq("engineer")
     end
   end
@@ -76,7 +76,7 @@ RSpec.describe Agentf::Evals::Runner do
     end
 
     it "marks the scenario failed when verify exits non-zero" do
-      write_scenario("engineer_store_success", agent: "engineer")
+      write_scenario("engineer_episode_positive", agent: "engineer")
       failed_status = instance_double(Process::Status, success?: false, exitstatus: 1)
 
       allow(Open3).to receive(:capture3)
@@ -85,7 +85,7 @@ RSpec.describe Agentf::Evals::Runner do
           ["", "verification failed", failed_status]
         )
 
-      result = runner.run(name: "engineer_store_success")
+      result = runner.run(name: "engineer_episode_positive")
 
       expect(result["passed"]).to eq(0)
       expect(result["failed"]).to eq(1)

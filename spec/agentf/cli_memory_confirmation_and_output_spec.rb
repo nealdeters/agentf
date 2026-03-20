@@ -27,7 +27,7 @@ RSpec.describe Agentf::CLI::Memory do
     end
   end
 
-  describe "delete and tag output formatting" do
+  describe "delete output formatting" do
     it "outputs delete result as JSON when --json is passed"  , :aggregate_failures do
       res = { "mode" => "id", "scope" => "project", "dry_run" => false, "candidate_count" => 1, "deleted_count" => 1, "deleted_ids" => ["e1"] }
       allow(memory).to receive(:delete_memory_by_id).and_return(res)
@@ -54,15 +54,15 @@ RSpec.describe Agentf::CLI::Memory do
       expect(out).to include("Mode: all | Scope: all")
     end
 
-    it "formats tags listing for empty and non-empty results"  , :aggregate_failures do
-      allow(reviewer).to receive(:get_all_tags).and_return({ "tags" => [], "count" => 0 })
-      out1 = capture_stdout { cli.run(["tags"]) }
-      expect(out1).to include("No tags found")
+    it "formats episode listings with outcomes"  , :aggregate_failures do
+      allow(reviewer).to receive(:get_episodes).and_return({
+        "count" => 1,
+        "memories" => [{ "type" => "episode", "title" => "Deploy", "description" => "done", "outcome" => "positive", "agent" => "ENGINEER", "created_at" => "now" }]
+      })
 
-      allow(reviewer).to receive(:get_all_tags).and_return({ "tags" => ["a","b"], "count" => 2 })
-      out2 = capture_stdout { cli.run(["tags"]) }
-      expect(out2).to include("Tags (2):")
-      expect(out2).to include("- a")
+      out = capture_stdout { cli.run(["episodes"]) }
+      expect(out).to include("[EPISODE] Deploy")
+      expect(out).to include("Outcome: positive")
     end
   end
 

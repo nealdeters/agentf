@@ -70,6 +70,7 @@ RSpec.describe Agentf::CLI::Install do
       expect(output).to include("Completed")
       expect(File).to exist(File.join(local_root, ".opencode/agents/agentf-planner.md"))
       expect(File).to exist(File.join(local_root, ".github/agents/planner.agent.md"))
+      expect(JSON.parse(File.read(File.join(local_root, ".vscode/mcp.json"))).dig("servers", "agentf", "args")).to eq(["mcp-server"])
     end
   end
 

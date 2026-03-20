@@ -7,8 +7,6 @@ module Agentf
     class Metrics
       NAME = "metrics"
 
-      WORKFLOW_METRICS_TAG = "workflow_metric"
-
       def self.manifest
         {
           "name" => NAME,
@@ -30,12 +28,13 @@ module Agentf
         metrics = extract_metrics(workflow_state)
         begin
           @memory.store_episode(
-            type: "success",
+            type: "episode",
             title: metric_title(metrics),
             description: metric_description(metrics),
             context: metric_context(metrics),
-            tags: metric_tags(metrics),
             agent: Agentf::AgentRoles::ORCHESTRATOR,
+            outcome: "positive",
+            metadata: { "workflow_metric" => true },
             code_snippet: ""
           )
           { "status" => "recorded", "metrics" => metrics }
@@ -171,14 +170,6 @@ module Agentf
         }.to_json
       end
 
-      def metric_tags(metrics)
-        [
-          WORKFLOW_METRICS_TAG,
-          "provider:#{metrics['provider'].to_s.downcase}",
-          "workflow:#{metrics['workflow_type']}"
-        ]
-      end
-
       def top_contract_violations(records)
         counts = Hash.new(0)
         records.each do |record|
@@ -191,7 +182,7 @@ module Agentf
         memories = @memory.get_recent_memories(limit: limit)
 
         memories
-          .select { |m| Array(m["tags"]).include?(WORKFLOW_METRICS_TAG) }
+          .select { |m| m.dig("metadata", "workflow_metric") == true }
           .map do |m|
             context = parse_context_json(m["context"])
             context

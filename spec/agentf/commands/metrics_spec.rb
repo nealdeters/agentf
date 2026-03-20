@@ -33,7 +33,7 @@ RSpec.describe Agentf::Commands::Metrics do
       expect(result["status"]).to eq("recorded")
 
       recent = memory.get_recent_memories(limit: 20)
-      metric_memory = recent.find { |m| Array(m["tags"]).include?("workflow_metric") }
+      metric_memory = recent.find { |m| m.dig("metadata", "workflow_metric") == true }
       expect(metric_memory).not_to be_nil
       expect(metric_memory["title"]).to include("OPENCODE")
       parsed = JSON.parse(metric_memory["context"])

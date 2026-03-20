@@ -11,7 +11,7 @@ module Agentf
       COMMANDS = %w[detect_framework generate_unit_tests run_tests].freeze
       MEMORY_CONCEPTS = {
         "reads" => [],
-        "writes" => ["store_success"],
+        "writes" => ["store_episode"],
         "policy" => "Persist test generation outcomes for future reuse."
       }.freeze
 
@@ -63,13 +63,14 @@ module Agentf
 
         template = @commands.generate_unit_tests(code_file)
 
-        res = safe_memory_write(attempted: { action: "store_success", title: "Generated #{test_type} tests for #{code_file}", tags: ["testing", test_type, code_file.split(".").last], agent: name }) do
-          memory.store_success(
+        res = safe_memory_write(attempted: { action: "store_episode", title: "Generated #{test_type} tests for #{code_file}", outcome: "positive", agent: name }) do
+          memory.store_episode(
+            type: "episode",
             title: "Generated #{test_type} tests for #{code_file}",
             description: "Created #{template.test_file} with #{test_type} tests",
             context: "Test framework: #{template.framework}",
-            tags: ["testing", test_type, code_file.split(".").last],
-            agent: name
+            agent: name,
+            outcome: "positive"
           )
         end
 

@@ -9,12 +9,9 @@ module Agentf
   class Installer
     READ_ACTIONS = {
       "get_recent_memories" => { cli: "agentf memory recent -n 10", tool: "agentf-memory-recent" },
-      "get_pitfalls" => { cli: "agentf memory pitfalls -n 10", tool: "agentf-memory-recent" },
+      "get_episodes" => { cli: "agentf memory episodes -n 10", tool: "agentf-memory-episodes" },
       "get_lessons" => { cli: "agentf memory lessons -n 10", tool: "agentf-memory-recent" },
-      "get_successes" => { cli: "agentf memory successes -n 10", tool: "agentf-memory-recent" },
       "get_intents" => { cli: "agentf memory intents", tool: "agentf-memory-recent" },
-      "get_all_tags" => { cli: "agentf memory tags", tool: "agentf-memory-recent" },
-      "get_by_tag" => { cli: "agentf memory by-tag <tag> -n 10", tool: "agentf-memory-search" },
       "get_by_type" => { cli: "agentf memory by-type <type> -n 10", tool: "agentf-memory-search" },
       "get_by_agent" => { cli: "agentf memory by-agent <agent> -n 10", tool: "agentf-memory-search" },
       "search" => { cli: "agentf memory search \"<query>\" -n 10", tool: "agentf-memory-search" },
@@ -22,10 +19,10 @@ module Agentf
     }.freeze
 
     WRITE_ACTIONS = {
-      "store_lesson" => { cli: "agentf memory add-lesson \"<title>\" \"<description>\" --agent=<AGENT> --tags=learning", tool: "agentf-memory-add-lesson" },
-      "store_success" => { cli: "agentf memory add-success \"<title>\" \"<description>\" --agent=<AGENT> --tags=success", tool: "agentf-memory-add-success" },
-      "store_pitfall" => { cli: "agentf memory add-pitfall \"<title>\" \"<description>\" --agent=<AGENT> --tags=pitfall", tool: "agentf-memory-add-pitfall" },
-      "store_business_intent" => { cli: "agentf memory add-business-intent \"<title>\" \"<description>\" --tags=strategy", tool: "agentf-memory-add-business-intent" },
+      "store_lesson" => { cli: "agentf memory add-lesson \"<title>\" \"<description>\" --agent=<AGENT>", tool: "agentf-memory-add-lesson" },
+      "store_episode" => { cli: "agentf memory add-episode \"<title>\" \"<description>\" --outcome=positive --agent=<AGENT>", tool: "agentf-memory-episodes" },
+      "store_playbook" => { cli: "agentf memory add-playbook \"<title>\" \"<description>\" --steps=\"<step1>;<step2>\"", tool: "agentf-memory-add-playbook" },
+      "store_business_intent" => { cli: "agentf memory add-business-intent \"<title>\" \"<description>\"", tool: "agentf-memory-add-business-intent" },
       "store_feature_intent" => { cli: "agentf memory add-feature-intent \"<title>\" \"<description>\" --acceptance=\"<criteria>\"", tool: "agentf-memory-add-feature-intent" }
     }.freeze
 
@@ -84,6 +81,7 @@ module Agentf
         writes.concat(write_agents(root: root, layout: layout, provider: provider, only_agents: only_agents))
         writes.concat(write_commands(root: root, layout: layout, provider: provider, only_commands: only_commands))
         writes.concat(write_opencode_helpers(root: root)) if provider.to_s == "opencode"
+        writes.concat(write_copilot_helpers(root: root)) if provider.to_s == "copilot"
       end
 
       # Optionally install dependencies for opencode helper package.json
@@ -193,6 +191,12 @@ module Agentf
         writes << write_package_json(root)
       end
       writes
+    end
+
+    def write_copilot_helpers(root:)
+      return [] unless root == @local_root
+
+      [write_copilot_mcp_json(root)]
     end
 
     def opencode_plugin_runtime?
@@ -351,8 +355,8 @@ module Agentf
         Copilot should call the local `agentf` MCP server tools for runtime actions.
 
         - Code discovery tools: `agentf-code-glob`, `agentf-code-grep`, `agentf-code-tree`, `agentf-code-related-files`
-        - Memory read tools: `agentf-memory-recent`, `agentf-memory-search`
-        - Memory write tools (if enabled): `agentf-memory-add-lesson`, `agentf-memory-add-success`, `agentf-memory-add-pitfall`
+        - Memory read tools: `agentf-memory-recent`, `agentf-memory-search`, `agentf-memory-episodes`
+        - Memory write tools (if enabled): `agentf-memory-add-lesson`, `agentf-memory-add-playbook`
 
         MCP server is started via `agentf mcp-server` and runs locally over stdio.
       MARKDOWN
@@ -365,8 +369,8 @@ module Agentf
       recommended_tools = case command_name
                            when "explorer"
                              "`agentf-code-glob`, `agentf-code-grep`, `agentf-code-tree`, `agentf-code-related-files`"
-                           when "memory"
-                             "`agentf-memory-recent`, `agentf-memory-search`, `agentf-memory-add-lesson`, `agentf-memory-add-success`, `agentf-memory-add-pitfall`"
+                            when "memory"
+                              "`agentf-memory-recent`, `agentf-memory-search`, `agentf-memory-episodes`, `agentf-memory-add-lesson`, `agentf-memory-add-playbook`"
                            else
                              "`agentf-code-glob`, `agentf-code-grep`, `agentf-memory-recent`, `agentf-memory-search`"
                           end
@@ -401,7 +405,7 @@ module Agentf
         1. Build plan from provider adapter (`Agentf::Service::Providers::OpenCode` or `Agentf::Service::Providers::Copilot`)
         2. Enrich each agent step with brain context from Redis memory
         3. Persist feature intent at workflow start
-        4. Persist lessons/pitfalls from each agent execution
+        4. Persist lessons and negative episodes from each agent execution
         5. Return full workflow state for manual review and future autonomous control
         6. Enforce workflow contract stages (`spec`, `plan`, `execute`, `review`, `finalize`) when enabled
 
@@ -691,17 +695,6 @@ module Agentf
                 return runAgentfCli(context.directory, "memory", "search", [_args.query, "-n", String(limit)]);
               },
             }),
-            "agentf-memory-by-tag": tool({
-              description: "Get Agentf memories by tag.",
-              args: {
-                tag: tool.schema.string().describe("Tag to filter by"),
-                limit: tool.schema.number().int().min(1).max(100).optional().describe("How many results to return"),
-              },
-              async execute(_args: any, context: any) {
-                const limit = _args.limit ?? 10;
-                return runAgentfCli(context.directory, "memory", "by-tag", [_args.tag, "-n", String(limit)]);
-              },
-            }),
             "agentf-memory-by-agent": tool({
               description: "Get Agentf memories by agent.",
               args: {
@@ -716,7 +709,7 @@ module Agentf
             "agentf-memory-by-type": tool({
               description: "Get Agentf memories by type.",
               args: {
-                type: tool.schema.string().describe("Memory type (pitfall|lesson|success|business_intent|feature_intent)"),
+                type: tool.schema.string().describe("Memory type (episode|lesson|playbook|business_intent|feature_intent|incident)"),
                 limit: tool.schema.number().int().min(1).max(100).optional().describe("How many results to return"),
               },
               async execute(_args: any, context: any) {
@@ -724,19 +717,17 @@ module Agentf
                 return runAgentfCli(context.directory, "memory", "by-type", [_args.type, "-n", String(limit)]);
               },
             }),
-            "agentf-memory-tags": tool({
-              description: "List all unique memory tags.",
-              args: {},
-              async execute(_args: any, context: any) {
-                return runAgentfCli(context.directory, "memory", "tags", []);
+            "agentf-memory-episodes": tool({
+              description: "List episode memories.",
+              args: {
+                outcome: tool.schema.string().optional().describe("Optional outcome filter (positive|negative|neutral)"),
+                limit: tool.schema.number().int().min(1).max(100).optional(),
               },
-            }),
-            "agentf-memory-pitfalls": tool({
-              description: "List pitfall memories.",
-              args: { limit: tool.schema.number().int().min(1).max(100).optional() },
               async execute(_args: any, context: any) {
                 const limit = _args.limit ?? 10;
-                return runAgentfCli(context.directory, "memory", "pitfalls", ["-n", String(limit)]);
+                const commandArgs = ["-n", String(limit)];
+                if (_args.outcome) commandArgs.push(`--outcome=${_args.outcome}`);
+                return runAgentfCli(context.directory, "memory", "episodes", commandArgs);
               },
             }),
             "agentf-memory-lessons": tool({
@@ -745,14 +736,6 @@ module Agentf
               async execute(_args: any, context: any) {
                 const limit = _args.limit ?? 10;
                 return runAgentfCli(context.directory, "memory", "lessons", ["-n", String(limit)]);
-              },
-            }),
-            "agentf-memory-successes": tool({
-              description: "List success memories.",
-              args: { limit: tool.schema.number().int().min(1).max(100).optional() },
-              async execute(_args: any, context: any) {
-                const limit = _args.limit ?? 10;
-                return runAgentfCli(context.directory, "memory", "successes", ["-n", String(limit)]);
               },
             }),
             "agentf-memory-intents": tool({
@@ -786,13 +769,11 @@ module Agentf
               args: {
                 title: tool.schema.string(),
                 description: tool.schema.string(),
-                tags: tool.schema.array(tool.schema.string()).optional(),
                 constraints: tool.schema.array(tool.schema.string()).optional(),
                 priority: tool.schema.number().int().optional(),
               },
               async execute(_args: any, context: any) {
                 const commandArgs = [_args.title, _args.description];
-                if (_args.tags?.length) commandArgs.push(`--tags=${_args.tags.join(",")}`);
                 if (_args.constraints?.length) commandArgs.push(`--constraints=${_args.constraints.join(";")}`);
                 if (Number.isInteger(_args.priority)) commandArgs.push(`--priority=${String(_args.priority)}`);
                 return runAgentfCli(context.directory, "memory", "add-business-intent", commandArgs);
@@ -803,14 +784,12 @@ module Agentf
               args: {
                 title: tool.schema.string(),
                 description: tool.schema.string(),
-                tags: tool.schema.array(tool.schema.string()).optional(),
                 acceptance: tool.schema.array(tool.schema.string()).optional(),
                 non_goals: tool.schema.array(tool.schema.string()).optional(),
                 related_task_id: tool.schema.string().optional(),
               },
               async execute(_args: any, context: any) {
                 const commandArgs = [_args.title, _args.description];
-                if (_args.tags?.length) commandArgs.push(`--tags=${_args.tags.join(",")}`);
                 if (_args.acceptance?.length) commandArgs.push(`--acceptance=${_args.acceptance.join(";")}`);
                 if (_args.non_goals?.length) commandArgs.push(`--non-goals=${_args.non_goals.join(";")}`);
                 if (_args.related_task_id) commandArgs.push(`--task=${_args.related_task_id}`);
@@ -856,52 +835,32 @@ module Agentf
                 title: tool.schema.string(),
                 description: tool.schema.string(),
                 agent: tool.schema.string().optional(),
-                tags: tool.schema.array(tool.schema.string()).optional(),
                 context: tool.schema.string().optional(),
               },
               async execute(_args: any, context: any) {
                 const commandArgs = [_args.title, _args.description];
                 if (_args.agent) commandArgs.push(`--agent=${_args.agent}`);
-                if (_args.tags?.length) commandArgs.push(`--tags=${_args.tags.join(",")}`);
                 if (_args.context) commandArgs.push(`--context=${_args.context}`);
 
                 return runAgentfCli(context.directory, "memory", "add-lesson", commandArgs);
               },
             }),
-            "agentf-memory-add-success": tool({
-              description: "Store a success memory in Redis.",
+            "agentf-memory-add-playbook": tool({
+              description: "Store a playbook memory in Redis.",
               args: {
                 title: tool.schema.string(),
                 description: tool.schema.string(),
                 agent: tool.schema.string().optional(),
-                tags: tool.schema.array(tool.schema.string()).optional(),
-                context: tool.schema.string().optional(),
+                steps: tool.schema.array(tool.schema.string()).optional(),
+                feature_area: tool.schema.string().optional(),
               },
               async execute(_args: any, context: any) {
                 const commandArgs = [_args.title, _args.description];
                 if (_args.agent) commandArgs.push(`--agent=${_args.agent}`);
-                if (_args.tags?.length) commandArgs.push(`--tags=${_args.tags.join(",")}`);
-                if (_args.context) commandArgs.push(`--context=${_args.context}`);
+                if (_args.steps?.length) commandArgs.push(`--steps=${_args.steps.join(";")}`);
+                if (_args.feature_area) commandArgs.push(`--feature-area=${_args.feature_area}`);
 
-                return runAgentfCli(context.directory, "memory", "add-success", commandArgs);
-              },
-            }),
-            "agentf-memory-add-pitfall": tool({
-              description: "Store a pitfall memory in Redis.",
-              args: {
-                title: tool.schema.string(),
-                description: tool.schema.string(),
-                agent: tool.schema.string().optional(),
-                tags: tool.schema.array(tool.schema.string()).optional(),
-                context: tool.schema.string().optional(),
-              },
-              async execute(_args: any, context: any) {
-                const commandArgs = [_args.title, _args.description];
-                if (_args.agent) commandArgs.push(`--agent=${_args.agent}`);
-                if (_args.tags?.length) commandArgs.push(`--tags=${_args.tags.join(",")}`);
-                if (_args.context) commandArgs.push(`--context=${_args.context}`);
-
-                return runAgentfCli(context.directory, "memory", "add-pitfall", commandArgs);
+                return runAgentfCli(context.directory, "memory", "add-playbook", commandArgs);
               },
             }),
           };
@@ -961,6 +920,10 @@ module Agentf
       JSON.pretty_generate(opencode_json_config(root))
     end
 
+    def render_copilot_mcp_json(root)
+      JSON.pretty_generate(copilot_mcp_config(root))
+    end
+
     def opencode_json_config(root)
       base = {
         "$schema" => "https://opencode.ai/config.json"
@@ -1015,6 +978,37 @@ module Agentf
       if new_content["mcp"]
         merged["mcp"] = (existing["mcp"] || {}).merge(new_content["mcp"])
       end
+
+      write_manifest(path, JSON.pretty_generate(merged))
+    end
+
+    def copilot_mcp_config(root)
+      {
+        "servers" => {
+          "agentf" => {
+            "type" => "stdio",
+            "command" => "agentf",
+            "args" => ["mcp-server"]
+          }
+        }
+      }
+    end
+
+    def write_copilot_mcp_json(root)
+      path = File.join(root, ".vscode", "mcp.json")
+      new_content = JSON.parse(render_copilot_mcp_json(root))
+
+      return write_manifest(path, JSON.pretty_generate(new_content)) unless File.exist?(path)
+
+      begin
+        existing = JSON.parse(File.read(path))
+      rescue StandardError => e
+        warn "Failed to parse existing #{path}: #{e.message}"
+        return write_manifest(path, JSON.pretty_generate(new_content))
+      end
+
+      merged = existing.dup
+      merged["servers"] = (existing["servers"] || {}).merge(new_content.fetch("servers"))
 
       write_manifest(path, JSON.pretty_generate(merged))
     end
@@ -1093,19 +1087,20 @@ module Agentf
         - `agent`: string
 
         ### 2. Episodic Memory (`episodic:*`)
-        Used for success, pitfall, lesson, and intent records.
+        Used for episode, lesson, playbook, and intent records.
 
         **Search index**: `episodic:logs`
 
         **Schema fields**:
         - `$.id`
         - `$.type`
+        - `$.outcome`
         - `$.title`
         - `$.description`
         - `$.project`
         - `$.context`
         - `$.code_snippet`
-        - `$.tags`
+        - `$.embedding`
         - `$.created_at`
         - `$.agent`
         - `$.related_task_id`
@@ -1116,9 +1111,9 @@ module Agentf
 
         - Read recent: `agentf memory recent -n 10`
         - Search: `agentf memory search "query" -n 10`
+        - List episodes: `agentf memory episodes -n 10 --outcome=negative`
         - Add lesson: `agentf memory add-lesson "<title>" "<description>" --agent=<AGENT>`
-        - Add success: `agentf memory add-success "<title>" "<description>" --agent=<AGENT>`
-        - Add pitfall: `agentf memory add-pitfall "<title>" "<description>" --agent=<AGENT>`
+        - Add playbook: `agentf memory add-playbook "<title>" "<description>" --steps="<step1>;<step2>"`
       MARKDOWN
     end
   end

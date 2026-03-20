@@ -11,7 +11,7 @@ module Agentf
       COMMANDS = %w[scan best_practices].freeze
       MEMORY_CONCEPTS = {
         "reads" => [],
-        "writes" => ["store_success", "store_pitfall"],
+        "writes" => ["store_episode"],
         "policy" => "Record findings while redacting sensitive values."
       }.freeze
 
@@ -66,24 +66,26 @@ module Agentf
           summary = summarize_findings(findings)
 
           if findings["issues"].empty?
-            res = safe_memory_write(attempted: { action: "store_success", title: "Security review passed", tags: ["security", "pass"], agent: name }) do
-              memory.store_success(
+            res = safe_memory_write(attempted: { action: "store_episode", title: "Security review passed", outcome: "positive", agent: name }) do
+              memory.store_episode(
+                type: "episode",
                 title: "Security review passed",
                 description: summary,
                 context: task,
-                tags: ["security", "pass"],
-                agent: name
+                agent: name,
+                outcome: "positive"
               )
             end
             return findings.merge(res) if res.is_a?(Hash) && res["confirmation_required"]
           else
-            res = safe_memory_write(attempted: { action: "store_pitfall", title: "Security findings detected", tags: ["security", "warning"], agent: name }) do
-              memory.store_pitfall(
+            res = safe_memory_write(attempted: { action: "store_episode", title: "Security findings detected", outcome: "negative", agent: name }) do
+              memory.store_episode(
+                type: "episode",
                 title: "Security findings detected",
                 description: summary,
                 context: task,
-                tags: ["security", "warning"],
-                agent: name
+                agent: name,
+                outcome: "negative"
               )
             end
             return findings.merge(res) if res.is_a?(Hash) && res["confirmation_required"]

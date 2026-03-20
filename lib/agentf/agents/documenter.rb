@@ -57,8 +57,8 @@ module Agentf
 
         memories = memory.get_recent_memories(limit: 20)
 
-        successes = memories.select { |m| m["type"] == "success" }
-        pitfalls = memories.select { |m| m["type"] == "pitfall" }
+        successes = memories.select { |m| m["type"] == "episode" && m["outcome"] == "positive" }
+        pitfalls = memories.select { |m| m["type"] == "episode" && m["outcome"] == "negative" }
 
         log "Found #{successes.size} successes"
         log "Found #{pitfalls.size} pitfalls"

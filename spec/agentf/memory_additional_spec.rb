@@ -6,12 +6,29 @@ RSpec.describe Agentf::Memory::RedisMemory do
   subject(:memory) { described_class.new(project: project) }
 
   describe "low-level helpers" do
+    it "delegates embeddings to the configured provider" do
+      provider = instance_double(Agentf::EmbeddingProvider, embed: [0.4, 0.6])
+      custom_memory = described_class.new(project: project, embedding_provider: provider)
+
+      expect(custom_memory.send(:embed_text, "hello world")).to eq([0.4, 0.6])
+    end
+
     it "parses embeddings from JSON strings and arrays"  , :aggregate_failures do
       expect(memory.send(:parse_embedding, nil)).to eq([])
       expect(memory.send(:parse_embedding, "")).to eq([])
       expect(memory.send(:parse_embedding, "not json")).to eq([])
       expect(memory.send(:parse_embedding, "[1,2,3]")).to eq([1.0, 2.0, 3.0])
       expect(memory.send(:parse_embedding, [4, 5])).to eq([4.0, 5.0])
+    end
+
+    it "normalizes vectors to the configured dimension and packs float32 blobs" , :aggregate_failures do
+      normalized = memory.send(:normalize_vector_dimensions, [1.0, 2.0, 3.0])
+      packed = memory.send(:pack_vector, [1.0, 2.0])
+
+      expect(normalized.length).to eq(Agentf::Memory::RedisMemory::VECTOR_DIMENSIONS)
+      expect(normalized.first(3)).to eq([1.0, 2.0, 3.0])
+      expect(normalized[3]).to eq(0.0)
+      expect(packed.bytesize).to eq(Agentf::Memory::RedisMemory::VECTOR_DIMENSIONS * 4)
     end
 
     it "computes cosine similarity edge cases"  , :aggregate_failures do
@@ -94,8 +111,10 @@ RSpec.describe Agentf::Memory::RedisMemory do
     it "detects missing module errors"  , :aggregate_failures do
       e1 = RuntimeError.new("Unknown command 'JSON.SET'")
       e2 = RuntimeError.new("Unknown command 'FT.SEARCH'")
+      e3 = RuntimeError.new("Syntax error near KNN")
       expect(memory.send(:missing_json_module?, e1)).to be true
       expect(memory.send(:missing_search_module?, e2)).to be true
+      expect(memory.send(:vector_query_unsupported?, e3)).to be true
     end
   end
 

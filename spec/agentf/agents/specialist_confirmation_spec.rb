@@ -8,7 +8,7 @@ RSpec.describe Agentf::Agents::Specialist do
 
   it "returns confirmation_required when memory requires confirmation on success"  , :aggregate_failures do
     confirmation = Agentf::Memory::RedisMemory::ConfirmationRequired.new("confirm", { reason: "ask_first" })
-    allow(memory).to receive(:store_success).and_raise(confirmation)
+    allow(memory).to receive(:store_episode).and_raise(confirmation)
 
     res = agent.execute(task: { "id" => "1", "description" => "Run job", "success" => true })
     expect(res["confirmation_required"]).to be(true)
@@ -17,7 +17,7 @@ RSpec.describe Agentf::Agents::Specialist do
 
   it "returns confirmation_required when memory requires confirmation on pitfall"  , :aggregate_failures do
     confirmation = Agentf::Memory::RedisMemory::ConfirmationRequired.new("confirm", { reason: "ask_first" })
-    allow(memory).to receive(:store_pitfall).and_raise(confirmation)
+    allow(memory).to receive(:store_episode).and_raise(confirmation)
 
     res = agent.execute(task: { "id" => "2", "description" => "Do bad", "success" => false })
     expect(res["confirmation_required"]).to be(true)

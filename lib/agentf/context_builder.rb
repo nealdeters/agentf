@@ -2,8 +2,9 @@
 
 module Agentf
   class ContextBuilder
-    def initialize(memory:)
+    def initialize(memory:, embedding_provider: Agentf::EmbeddingProvider.new)
       @memory = memory
+      @embedding_provider = embedding_provider
     end
 
     def build(agent:, workflow_state:, limit: 8)
@@ -13,23 +14,12 @@ module Agentf
       @memory.get_agent_context(
         agent: agent,
         task_type: task_type,
-        query_embedding: simple_embedding(task),
+        query_text: task,
+        query_embedding: @embedding_provider.embed(task),
         limit: limit
       )
     rescue StandardError
       { "agent" => agent, "intent" => [], "memories" => [], "similar_tasks" => [] }
-    end
-
-    private
-
-    def simple_embedding(text)
-      normalized = text.to_s.downcase
-      [
-        normalized.include?("fix") || normalized.include?("bug") ? 1.0 : 0.0,
-        normalized.include?("feature") || normalized.include?("add") ? 1.0 : 0.0,
-        normalized.include?("security") ? 1.0 : 0.0,
-        normalized.length.to_f / 100.0
-      ]
     end
   end
 end

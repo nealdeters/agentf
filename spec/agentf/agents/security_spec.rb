@@ -7,8 +7,7 @@ RSpec.describe Agentf::Agents::Security do
   subject(:agent) { described_class.new(memory, commands: commands) }
 
   before do
-    allow(memory).to receive(:store_success)
-    allow(memory).to receive(:store_pitfall)
+    allow(memory).to receive(:store_episode)
     allow(commands).to receive(:best_practices).and_return(["Use secret scanning"]) 
     allow(agent).to receive(:log)
   end
@@ -19,7 +18,7 @@ RSpec.describe Agentf::Agents::Security do
 
       result = agent.assess(task: "Build", context: {})
 
-      expect(memory).to have_received(:store_success)
+      expect(memory).to have_received(:store_episode).with(hash_including(type: "episode", outcome: "positive"))
       expect(result["issues"]).to be_empty
       expect(result["best_practices"]).to include("Use secret scanning")
     end
@@ -30,7 +29,7 @@ RSpec.describe Agentf::Agents::Security do
 
       result = agent.assess(task: "Deploy", context: { env: "SECRET=foo" })
 
-      expect(memory).to have_received(:store_pitfall)
+      expect(memory).to have_received(:store_episode).with(hash_including(type: "episode", outcome: "negative"))
       expect(result["issues"]).to eq(issues)
     end
   end

@@ -15,12 +15,13 @@ RSpec.describe Agentf::Agents::Specialist do
         "success" => true
       }
 
-      expect(memory).to receive(:store_success).with(
+      expect(memory).to receive(:store_episode).with(
+        type: "episode",
         title: "Completed: Build auth module",
         description: "Successfully executed subtask sub_1",
         context: "Working on auth",
-        tags: ["implementation", "ruby"],
-        agent: "ENGINEER"
+        agent: "ENGINEER",
+        outcome: "positive"
       )
 
       result = specialist.execute(task: subtask)
@@ -37,12 +38,13 @@ RSpec.describe Agentf::Agents::Specialist do
         "success" => false
       }
 
-      expect(memory).to receive(:store_pitfall).with(
+      expect(memory).to receive(:store_episode).with(
+        type: "episode",
         title: "Failed: Deploy service",
         description: "Subtask sub_2 failed",
         context: "Working on deploy",
-        tags: ["failure", "implementation"],
-        agent: "ENGINEER"
+        agent: "ENGINEER",
+        outcome: "negative"
       )
 
       result = specialist.execute(task: subtask)
@@ -57,7 +59,7 @@ RSpec.describe Agentf::Agents::Specialist do
         "task" => "testing"
       }
 
-      expect(memory).to receive(:store_success)
+      expect(memory).to receive(:store_episode)
 
       result = specialist.execute(task: subtask)
       expect(result["success"]).to be true
@@ -65,9 +67,9 @@ RSpec.describe Agentf::Agents::Specialist do
   end
 
   describe ".memory_concepts" do
-    it "declares writes for success and pitfall" do
+    it "declares episode writes" do
       concepts = described_class.memory_concepts
-      expect(concepts["writes"]).to include("store_success", "store_pitfall")
+      expect(concepts["writes"]).to include("store_episode")
     end
   end
 end

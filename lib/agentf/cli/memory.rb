@@ -13,7 +13,7 @@ module Agentf
     class Memory
       include ArgParser
 
-      VALID_EPISODE_TYPES = %w[pitfall lesson success business_intent feature_intent].freeze
+      VALID_EPISODE_TYPES = %w[episode lesson playbook business_intent feature_intent incident].freeze
 
       def initialize(reviewer: nil, memory: nil)
         @reviewer = reviewer || Commands::MemoryReviewer.new
@@ -28,12 +28,10 @@ module Agentf
         case command
         when "recent", "list"
           list_memories(args)
-        when "pitfalls"
-          list_pitfalls(args)
+        when "episodes"
+          list_episodes(args)
         when "lessons"
           list_lessons(args)
-        when "successes"
-          list_successes(args)
         when "intents"
           list_intents(args)
         when "business-intents"
@@ -44,14 +42,10 @@ module Agentf
           add_business_intent(args)
         when "add-feature-intent"
           add_feature_intent(args)
+        when "add-playbook"
+          add_playbook(args)
         when "add-lesson"
           add_episode("lesson", args)
-        when "add-success"
-          add_episode("success", args)
-        when "add-pitfall"
-          add_episode("pitfall", args)
-        when "tags"
-          list_tags
         when "search"
           search_memories(args)
         when "delete"
@@ -62,8 +56,6 @@ module Agentf
           subgraph(args)
         when "summary", "stats"
           show_summary
-        when "by-tag"
-          by_tag(args)
         when "by-agent"
           by_agent(args)
         when "by-type"
@@ -86,21 +78,16 @@ module Agentf
         output(result)
       end
 
-      def list_pitfalls(args)
+      def list_episodes(args)
         limit = extract_limit(args)
-        result = @reviewer.get_pitfalls(limit: limit)
+        outcome = parse_single_option(args, "--outcome=")
+        result = @reviewer.get_episodes(limit: limit, outcome: outcome)
         output(result)
       end
 
       def list_lessons(args)
         limit = extract_limit(args)
         result = @reviewer.get_lessons(limit: limit)
-        output(result)
-      end
-
-      def list_successes(args)
-        limit = extract_limit(args)
-        result = @reviewer.get_successes(limit: limit)
         output(result)
       end
 
@@ -141,16 +128,14 @@ module Agentf
           exit 1
         end
 
-        tags = parse_list_option(args, "--tags=")
         constraints = parse_list_option(args, "--constraints=")
         priority = parse_integer_option(args, "--priority=", default: 1)
 
         id = nil
-        res = safe_cli_memory_write(@memory, attempted: { command: "add-business-intent", args: { title: title, description: description, tags: tags, constraints: constraints, priority: priority } }) do
+        res = safe_cli_memory_write(@memory, attempted: { command: "add-business-intent", args: { title: title, description: description, constraints: constraints, priority: priority } }) do
           id = @memory.store_business_intent(
             title: title,
             description: description,
-            tags: tags,
             constraints: constraints,
             priority: priority
           )
@@ -181,17 +166,15 @@ module Agentf
           exit 1
         end
 
-        tags = parse_list_option(args, "--tags=")
         acceptance_criteria = parse_list_option(args, "--acceptance=")
         non_goals = parse_list_option(args, "--non-goals=")
         related_task_id = parse_single_option(args, "--task=")
 
         id = nil
-        res = safe_cli_memory_write(@memory, attempted: { command: "add-feature-intent", args: { title: title, description: description, tags: tags, acceptance: acceptance_criteria, non_goals: non_goals, related_task_id: related_task_id } }) do
+        res = safe_cli_memory_write(@memory, attempted: { command: "add-feature-intent", args: { title: title, description: description, acceptance: acceptance_criteria, non_goals: non_goals, related_task_id: related_task_id } }) do
           id = @memory.store_feature_intent(
             title: title,
             description: description,
-            tags: tags,
             acceptance_criteria: acceptance_criteria,
             non_goals: non_goals,
             related_task_id: related_task_id
@@ -214,6 +197,46 @@ module Agentf
         end
       end
 
+      def add_playbook(args)
+        title = args.shift
+        description = args.shift
+
+        if title.to_s.empty? || description.to_s.empty?
+          $stderr.puts "Error: add-playbook requires <title> <description>"
+          exit 1
+        end
+
+        steps = parse_list_option(args, "--steps=")
+        feature_area = parse_single_option(args, "--feature-area=")
+        agent = parse_single_option(args, "--agent=") || Agentf::AgentRoles::PLANNER
+
+        id = nil
+        res = safe_cli_memory_write(@memory, attempted: { command: "add-playbook", args: { title: title, description: description, steps: steps, feature_area: feature_area, agent: agent } }) do
+          id = @memory.store_playbook(
+            title: title,
+            description: description,
+            steps: steps,
+            feature_area: feature_area,
+            agent: agent
+          )
+        end
+
+        if res.is_a?(Hash) && res["confirmation_required"]
+          if @json_output
+            puts JSON.generate(res)
+          else
+            $stderr.puts "Confirmation required to store playbook: #{res['confirmation_details'].inspect}"
+          end
+          return
+        end
+
+        if @json_output
+          puts JSON.generate({ "id" => id, "type" => "playbook", "status" => "stored" })
+        else
+          puts "Stored playbook: #{id}"
+        end
+      end
+
       def add_episode(type, args)
         title = args.shift
         description = args.shift
@@ -223,21 +246,21 @@ module Agentf
           exit 1
         end
 
-        tags = parse_list_option(args, "--tags=")
         context = parse_single_option(args, "--context=").to_s
         agent = parse_single_option(args, "--agent=") || Agentf::AgentRoles::ENGINEER
         code_snippet = parse_single_option(args, "--code=").to_s
+        outcome = parse_single_option(args, "--outcome=")
 
         id = nil
-        res = safe_cli_memory_write(@memory, attempted: { command: "add-#{type}", args: { title: title, description: description, tags: tags, context: context, agent: agent, code: code_snippet } }) do
+        res = safe_cli_memory_write(@memory, attempted: { command: "add-#{type}", args: { title: title, description: description, context: context, agent: agent, code: code_snippet, outcome: outcome } }) do
           id = @memory.store_episode(
             type: type,
             title: title,
             description: description,
             context: context,
-            tags: tags,
             agent: agent,
-            code_snippet: code_snippet
+            code_snippet: code_snippet,
+            outcome: outcome
           )
         end
 
@@ -273,21 +296,6 @@ module Agentf
         end
       end
 
-      def list_tags
-        result = @reviewer.get_all_tags
-        if @json_output
-          puts JSON.generate(result)
-          return
-        end
-
-        if result["tags"].empty?
-          puts "No tags found."
-        else
-          puts "Tags (#{result["count"]}):"
-          result["tags"].each { |tag| puts "  - #{tag}" }
-        end
-      end
-
       def search_memories(args)
         # Extract limit BEFORE joining remaining args as query (fixes finding #7)
         limit = extract_limit(args)
@@ -318,19 +326,12 @@ module Agentf
         puts ""
         puts "By agent:"
         result["by_agent"].each { |agent, count| puts "  #{agent}: #{count}" }
-        puts ""
-        puts "Unique tags: #{result["unique_tags"]}"
-      end
 
-      def by_tag(args)
-        tag = args.shift
-        if tag.nil? || tag.empty?
-          $stderr.puts "Error: by-tag requires a tag name"
-          exit 1
+        if result["by_outcome"].is_a?(Hash)
+          puts ""
+          puts "By outcome:"
+          result["by_outcome"].each { |outcome, count| puts "  #{outcome}: #{count}" }
         end
-        limit = extract_limit(args)
-        result = @reviewer.get_by_tag(tag, limit: limit)
-        output(result)
       end
 
       def by_agent(args)
@@ -540,8 +541,8 @@ module Agentf
           [#{mem["type"]&.upcase}] #{mem["title"]}
           #{mem["created_at"]} by #{mem["agent"]}
           #{mem["description"]}
+          #{"Outcome: #{mem['outcome']}" unless mem["outcome"].to_s.empty?}
           #{format_code(mem["code_snippet"]) unless mem["code_snippet"].to_s.empty?}
-          Tags: #{mem["tags"]&.join(", ") || "none"}
         OUTPUT
       end
 
@@ -557,26 +558,22 @@ module Agentf
 
           Commands:
             recent, list              List recent memories (default: 10)
-            pitfalls                  List pitfalls (things that went wrong)
+            episodes                  List episode memories
             lessons                   List lessons learned
-            successes                 List successes
             intents [kind]            List intents (kind: business|feature)
             business-intents          List business intents
             feature-intents           List feature intents
             add-business-intent       Store business intent
             add-feature-intent        Store feature intent
+            add-playbook              Store playbook memory
             add-lesson                Store lesson memory
-            add-success               Store success memory
-            add-pitfall               Store pitfall memory
-            tags                      List all unique tags
-            search <query>            Search memories by keyword
+            search <query>            Search memories semantically
             delete id <memory_id>     Delete one memory and related edges
             delete last -n <count>    Delete most recent memories
             delete all                Delete memories and graph/task keys
             neighbors <id>            Traverse graph edges from a memory id
             subgraph <ids>            Build graph from comma-separated seed ids
             summary, stats            Show summary statistics
-            by-tag <tag>              Get memories with specific tag
             by-agent <agent>          Get memories from specific agent
             by-type <type>            Get memories by type (#{VALID_EPISODE_TYPES.join("|")})
 
@@ -586,18 +583,17 @@ module Agentf
 
           Examples:
             agentf memory recent -n 5
-            agentf memory pitfalls
+            agentf memory episodes --outcome=negative
             agentf memory intents business -n 5
-            agentf memory add-business-intent "Reliability" "Prioritize uptime" --tags=ops,platform --constraints="No downtime;No vendor lock-in"
+            agentf memory add-business-intent "Reliability" "Prioritize uptime" --constraints="No downtime;No vendor lock-in"
             agentf memory add-feature-intent "Agent handoff" "Improve orchestrator continuity" --acceptance="Keeps context;Preserves task state"
-            agentf memory add-lesson "Refactor strategy" "Extracted adapter seam" --agent=PLANNER --tags=architecture
-            agentf memory add-success "Provider install works" "Installed copilot + opencode manifests" --agent=ENGINEER
+            agentf memory add-playbook "Release rollout" "Safe deploy sequence" --steps="deploy canary;monitor;promote"
+            agentf memory add-lesson "Refactor strategy" "Extracted adapter seam" --agent=PLANNER
             agentf memory search "react"
             agentf memory delete id episode_abcd
             agentf memory delete last -n 10 --scope=project
             agentf memory delete all --scope=all --yes
             agentf memory neighbors episode_abcd --depth=2
-            agentf memory by-tag "performance"
             agentf memory summary
         HELP
       end

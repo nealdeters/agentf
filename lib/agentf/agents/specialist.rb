@@ -10,7 +10,7 @@ module Agentf
       COMMANDS = %w[read_file write_file run_command].freeze
       MEMORY_CONCEPTS = {
         "reads" => [],
-        "writes" => ["store_success", "store_pitfall"],
+        "writes" => ["store_episode"],
         "policy" => "Persist execution outcomes as lessons for downstream agents."
       }.freeze
 
@@ -66,13 +66,14 @@ module Agentf
           success = normalized_subtask.fetch("success", true)
 
           if success
-            res = safe_memory_write(attempted: { action: "store_success", title: "Completed: #{normalized_subtask['description']}", tags: ["implementation", normalized_subtask.fetch("language", "general")], agent: name }) do
-              memory.store_success(
+            res = safe_memory_write(attempted: { action: "store_episode", title: "Completed: #{normalized_subtask['description']}", outcome: "positive", agent: name }) do
+              memory.store_episode(
+                type: "episode",
                 title: "Completed: #{normalized_subtask['description']}",
                 description: "Successfully executed subtask #{normalized_subtask['id']}",
                 context: "Working on #{normalized_subtask.fetch('task', 'unknown task')}",
-                tags: ["implementation", normalized_subtask.fetch("language", "general")],
-                agent: name
+                agent: name,
+                outcome: "positive"
               )
             end
 
@@ -81,13 +82,14 @@ module Agentf
               return { "subtask_id" => normalized_subtask["id"], "success" => success, "result" => "Code executed", "confirmation_required" => true, "confirmation_details" => res["confirmation_details"], "attempted" => res["attempted"] }
             end
           else
-            res = safe_memory_write(attempted: { action: "store_pitfall", title: "Failed: #{normalized_subtask['description']}", tags: ["failure", "implementation"], agent: name }) do
-              memory.store_pitfall(
+            res = safe_memory_write(attempted: { action: "store_episode", title: "Failed: #{normalized_subtask['description']}", outcome: "negative", agent: name }) do
+              memory.store_episode(
+                type: "episode",
                 title: "Failed: #{normalized_subtask['description']}",
                 description: "Subtask #{normalized_subtask['id']} failed",
                 context: "Working on #{normalized_subtask.fetch('task', 'unknown task')}",
-                tags: ["failure", "implementation"],
-                agent: name
+                agent: name,
+                outcome: "negative"
               )
             end
 

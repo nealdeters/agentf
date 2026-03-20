@@ -16,7 +16,7 @@ RSpec.describe Agentf::Agents::Designer do
 
   it "returns confirmation_required when memory requires confirmation"  , :aggregate_failures do
     confirmation = Agentf::Memory::RedisMemory::ConfirmationRequired.new("confirm", { reason: "ask_first" })
-    allow(memory).to receive(:store_success).and_raise(confirmation)
+    allow(memory).to receive(:store_episode).and_raise(confirmation)
 
     res = agent.implement_design("Create card")
     expect(res["confirmation_required"]).to be(true)

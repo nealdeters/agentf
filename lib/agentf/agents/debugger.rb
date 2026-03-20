@@ -66,13 +66,12 @@ module Agentf
 
           analysis = @commands.parse_error(error)
 
-          res = safe_memory_write(attempted: { action: "store_lesson", title: "Debugged: #{error[0..50]}...", tags: ["debugging", "error", "fix"], agent: name }) do
+          res = safe_memory_write(attempted: { action: "store_lesson", title: "Debugged: #{error[0..50]}...", agent: name }) do
             memory.store_episode(
               type: "lesson",
               title: "Debugged: #{error[0..50]}...",
               description: "Root cause: #{analysis.possible_causes.first}. Fix: #{analysis.suggested_fix}",
               context: context.to_s,
-              tags: ["debugging", "error", "fix"],
               agent: name
             )
           end

@@ -5,11 +5,9 @@ RSpec.describe Agentf::WorkflowEngine do
     double(
       "memory",
       get_recent_memories: [],
-      get_pitfalls: [],
+      get_episodes: [],
       get_agent_context: {},
       store_episode: nil,
-      store_success: nil,
-      store_pitfall: nil,
       store_lesson: nil,
       store_feature_intent: nil,
       get_relevant_context: {}
@@ -86,11 +84,9 @@ RSpec.describe Agentf::WorkflowEngine do
       memory_with_confirmation = double(
         "memory",
         get_recent_memories: [],
-        get_pitfalls: [],
+        get_episodes: [],
         get_agent_context: {},
         store_episode: nil,
-        store_success: nil,
-        store_pitfall: nil,
         store_lesson: nil,
         get_relevant_context: {}
       )

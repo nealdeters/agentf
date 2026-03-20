@@ -9,9 +9,9 @@ module Agentf
       DESCRIPTION = "Quality assurance and regression checking against memory."
       COMMANDS = %w[read_file memory].freeze
       MEMORY_CONCEPTS = {
-        "reads" => ["get_pitfalls", "get_recent_memories"],
+        "reads" => ["get_episodes", "get_recent_memories"],
         "writes" => [],
-        "policy" => "Validate outputs against known pitfalls before approval."
+        "policy" => "Validate outputs against known negative episodes before approval."
       }.freeze
 
       def self.description
@@ -56,14 +56,14 @@ module Agentf
         execute_with_contract(context: { "execution" => subtask_result }) do
           log "Reviewing subtask #{subtask_result['subtask_id']}"
 
-          pitfalls = memory.get_pitfalls(limit: 5)
-          memories = memory.get_recent_memories(limit: 5)
+            pitfalls = memory.get_episodes(limit: 5, outcome: "negative")
+            memories = memory.get_recent_memories(limit: 5)
 
           issues = []
 
-          pitfalls.each do |pitfall|
-            issues << "Warning: Known pitfall - #{pitfall['title']}" if pitfall["type"] == "pitfall"
-          end
+            pitfalls.each do |pitfall|
+              issues << "Warning: Known negative episode - #{pitfall['title']}" if pitfall["type"] == "episode"
+            end
 
           approved = issues.empty?
 
