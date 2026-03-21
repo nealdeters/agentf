@@ -4,6 +4,7 @@ module Agentf
   module Agents
     # Base agent class
     class Base
+      include Agentf::Memory::ConfirmationHandler
       attr_reader :memory, :name
 
       def self.typed_name
@@ -52,6 +53,10 @@ module Agentf
         }
       end
 
+      def self.writes_code?
+        false
+      end
+
       def initialize(memory)
         @memory = memory
         @name = self.class.typed_name
@@ -91,28 +96,8 @@ module Agentf
           result: result
         )
 
-      result
-    end
-
-    # Helper to centralize memory write confirmation handling.
-    # Yields a block that performs the memory write. If the memory layer
-    # requires confirmation (ask_first policy) a structured hash is
-    # returned with confirmation details so agents can merge that into
-    # their own return payloads or let the orchestrator handle prompting.
-    def safe_memory_write(attempted: {})
-      begin
-        yield
-      rescue Agentf::Memory::RedisMemory::ConfirmationRequired => e
-        log "[MEMORY] Confirmation required: #{e.message} -- details=#{e.details.inspect}"
-        {
-          "confirmation_required" => true,
-          "confirmation_details" => e.details,
-          "attempted" => attempted,
-          "confirmed_write_token" => "confirmed",
-          "confirmation_prompt" => "Ask the user whether to save this memory. If they approve, rerun the same tool with confirmedWrite=confirmed. If they decline, do not retry."
-        }
+        result
       end
-    end
     end
   end
 end

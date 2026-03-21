@@ -45,12 +45,26 @@ module Agentf
 
       def self.policy_boundaries
         {
-          "always" => ["Produce framework-aware tests", "Verify red/green state when TDD enabled"],
+          "always" => [
+            "Produce framework-aware tests",
+            "Verify red/green state when TDD enabled",
+            "Write a failing spec before adding any new test helper, fixture, or shared example (red)",
+            "Run the test suite to confirm the spec fails before writing implementation",
+            "Run the test suite again after implementation to confirm green"
+          ],
           "ask_first" => ["Changing test framework conventions", "Persisting test-generation outcomes to memory"],
-          "never" => ["Mark passing when command output is uncertain"],
+          "never" => [
+            "Mark passing when command output is uncertain",
+            "Create a new test helper or shared example without a corresponding spec file",
+            "Skip red/green verification when writing or modifying test infrastructure code"
+          ],
           "required_inputs" => [],
           "required_outputs" => ["test_file"]
         }
+      end
+
+      def self.writes_code?
+        true
       end
 
       def initialize(memory, commands: nil)

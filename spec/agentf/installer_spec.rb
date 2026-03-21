@@ -236,5 +236,160 @@ RSpec.describe Agentf::Installer do
       expect(content).to include("This manifest is a thin pointer.")
       expect(content).to include("Policy Summary:")
     end
+
+    context "CLI fallback section for agents" do
+      it "includes CLI fallback section in all provider agent manifests", :aggregate_failures do
+        installer = described_class.new(global_root: global_root, local_root: local_root)
+        installer.install(providers: ["opencode", "copilot"], scope: "local", only_agents: ["planner"], only_commands: [])
+
+        opencode_content = File.read(File.join(local_root, ".opencode/agents/agentf-planner.md"))
+        copilot_content = File.read(File.join(local_root, ".github/agents/planner.agent.md"))
+
+        expect(opencode_content).to include("## CLI Fallback")
+        expect(opencode_content).to include("If the `agentf` MCP server is unavailable")
+        expect(copilot_content).to include("## CLI Fallback")
+        expect(copilot_content).to include("If the `agentf` MCP server is unavailable")
+      end
+
+      it "includes agent CLI invocation in copilot fallback section", :aggregate_failures do
+        installer = described_class.new(global_root: global_root, local_root: local_root)
+        installer.install(providers: ["copilot"], scope: "local", only_agents: ["planner"], only_commands: [])
+
+        content = File.read(File.join(local_root, ".github/agents/planner.agent.md"))
+
+        expect(content).to include("`agentf agent planner \"<input>\"`")
+      end
+
+      it "includes standard memory read CLI commands in copilot fallback", :aggregate_failures do
+        installer = described_class.new(global_root: global_root, local_root: local_root)
+        installer.install(providers: ["copilot"], scope: "local", only_agents: ["planner"], only_commands: [])
+
+        content = File.read(File.join(local_root, ".github/agents/planner.agent.md"))
+
+        expect(content).to include("agentf memory recent -n 10")
+        expect(content).to include("agentf memory search")
+      end
+
+      it "includes memory write fallback CLI commands when agent writes to memory", :aggregate_failures do
+        installer = described_class.new(global_root: global_root, local_root: local_root)
+        installer.install(providers: ["copilot"], scope: "local", only_agents: ["qa_tester"], only_commands: [])
+
+        content = File.read(File.join(local_root, ".github/agents/qa_tester.agent.md"))
+
+        expect(content).to include("**Memory writes**:")
+        expect(content).to include("agentf memory add-episode")
+        expect(content).to include("--agent=QA_TESTER")
+      end
+
+      it "omits memory write section for agents with no memory writes", :aggregate_failures do
+        installer = described_class.new(global_root: global_root, local_root: local_root)
+        installer.install(providers: ["copilot"], scope: "local", only_agents: ["planner"], only_commands: [])
+
+        content = File.read(File.join(local_root, ".github/agents/planner.agent.md"))
+
+        expect(content).not_to include("**Memory writes**:")
+      end
+
+      it "includes CLI fallback section in opencode agent manifests" do
+        installer = described_class.new(global_root: global_root, local_root: local_root)
+        installer.install(providers: ["opencode"], scope: "local", only_agents: ["planner"], only_commands: [])
+
+        content = File.read(File.join(local_root, ".opencode/agents/agentf-planner.md"))
+
+        expect(content).to include("## CLI Fallback")
+      end
+    end
+
+    context "CLI fallback section for commands" do
+      it "includes CLI fallback section in all provider command manifests", :aggregate_failures do
+        installer = described_class.new(global_root: global_root, local_root: local_root)
+        installer.install(providers: ["opencode", "copilot"], scope: "local", only_agents: [], only_commands: ["explorer"])
+
+        opencode_content = File.read(File.join(local_root, ".opencode/commands/agentf-explorer.md"))
+        copilot_content = File.read(File.join(local_root, ".github/commands/explorer.md"))
+
+        expect(opencode_content).to include("## CLI Fallback")
+        expect(opencode_content).to include("If the `agentf` MCP server is unavailable")
+        expect(copilot_content).to include("## CLI Fallback")
+        expect(copilot_content).to include("If the `agentf` MCP server is unavailable")
+      end
+
+      it "includes explorer-specific code CLI commands", :aggregate_failures do
+        installer = described_class.new(global_root: global_root, local_root: local_root)
+        installer.install(providers: ["copilot"], scope: "local", only_agents: [], only_commands: ["explorer"])
+
+        content = File.read(File.join(local_root, ".github/commands/explorer.md"))
+
+        expect(content).to include("agentf code glob")
+        expect(content).to include("agentf code grep")
+        expect(content).to include("agentf code tree")
+        expect(content).to include("agentf code related")
+      end
+
+      it "includes memory CLI commands for the memory command", :aggregate_failures do
+        installer = described_class.new(global_root: global_root, local_root: local_root)
+        installer.install(providers: ["copilot"], scope: "local", only_agents: [], only_commands: ["memory"])
+
+        content = File.read(File.join(local_root, ".github/commands/memory.md"))
+
+        expect(content).to include("agentf memory recent -n 10")
+        expect(content).to include("agentf memory search")
+        expect(content).to include("agentf memory add-lesson")
+      end
+
+      it "includes generic fallback for unspecialized commands", :aggregate_failures do
+        installer = described_class.new(global_root: global_root, local_root: local_root)
+        installer.install(providers: ["copilot"], scope: "local", only_agents: [], only_commands: ["debugger"])
+
+        content = File.read(File.join(local_root, ".github/commands/debugger.md"))
+
+        expect(content).to include("## CLI Fallback")
+        expect(content).to include("agentf memory recent -n 10")
+      end
+    end
+
+    context "TDD requirement section in agent manifests" do
+      it "includes TDD Requirement section for code-writing agents", :aggregate_failures do
+        installer = described_class.new(global_root: global_root, local_root: local_root)
+        installer.install(providers: ["opencode"], scope: "local", only_agents: ["engineer"], only_commands: [])
+
+        content = File.read(File.join(local_root, ".opencode/agents/agentf-engineer.md"))
+
+        expect(content).to include("## TDD Requirement")
+        expect(content).to include("Write the spec first")
+        expect(content).to include("confirm red")
+        expect(content).to include("confirm green")
+        expect(content).to include("Showing test output")
+      end
+
+      it "includes TDD Requirement section for ui_engineer agent", :aggregate_failures do
+        installer = described_class.new(global_root: global_root, local_root: local_root)
+        installer.install(providers: ["opencode"], scope: "local", only_agents: ["ui_engineer"], only_commands: [])
+
+        content = File.read(File.join(local_root, ".opencode/agents/agentf-ui_engineer.md"))
+
+        expect(content).to include("## TDD Requirement")
+      end
+
+      it "includes TDD Requirement section for qa_tester agent", :aggregate_failures do
+        installer = described_class.new(global_root: global_root, local_root: local_root)
+        installer.install(providers: ["opencode"], scope: "local", only_agents: ["qa_tester"], only_commands: [])
+
+        content = File.read(File.join(local_root, ".opencode/agents/agentf-qa_tester.md"))
+
+        expect(content).to include("## TDD Requirement")
+      end
+
+      it "does not include TDD Requirement section for non-code-writing agents", :aggregate_failures do
+        installer = described_class.new(global_root: global_root, local_root: local_root)
+        installer.install(providers: ["opencode"], scope: "local", only_agents: ["planner", "incident_responder"], only_commands: [])
+
+        planner_content = File.read(File.join(local_root, ".opencode/agents/agentf-planner.md"))
+        debugger_content = File.read(File.join(local_root, ".opencode/agents/agentf-incident_responder.md"))
+
+        expect(planner_content).not_to include("## TDD Requirement")
+        expect(debugger_content).not_to include("## TDD Requirement")
+      end
+    end
   end
 end

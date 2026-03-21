@@ -44,12 +44,26 @@ module Agentf
 
       def self.policy_boundaries
         {
-          "always" => ["Persist execution outcome", "Return deterministic success boolean"],
-          "ask_first" => ["Applying architecture style changes across unrelated modules", "Persisting execution outcomes to memory (success/pitfall)"] ,
-          "never" => ["Claim implementation complete without execution result"],
+          "always" => [
+            "Persist execution outcome",
+            "Return deterministic success boolean",
+            "Write a failing spec before adding any new class, method, or module (red)",
+            "Run the test suite to confirm the spec fails before writing implementation",
+            "Run the test suite again after implementation to confirm green"
+          ],
+          "ask_first" => ["Applying architecture style changes across unrelated modules", "Persisting execution outcomes to memory (success/pitfall)"],
+          "never" => [
+            "Claim implementation complete without execution result",
+            "Create a new class, method, or module without a corresponding spec file",
+            "Skip red/green verification when writing or modifying code"
+          ],
           "required_inputs" => ["description"],
           "required_outputs" => ["subtask_id", "success"]
         }
+      end
+
+      def self.writes_code?
+        true
       end
 
       def execute(task:, context: {}, agents: {}, commands: {}, logger: nil)

@@ -244,3 +244,52 @@ RSpec.describe Agentf::Agents::Designer do
     end
   end
 end
+
+RSpec.describe "Agentf::Agents writes_code? contract" do
+  describe ".writes_code?" do
+    it "returns true for code-writing agents", :aggregate_failures do
+      expect(Agentf::Agents::Specialist.writes_code?).to be true
+      expect(Agentf::Agents::Designer.writes_code?).to be true
+      expect(Agentf::Agents::Tester.writes_code?).to be true
+    end
+
+    it "returns false for non-code-writing agents", :aggregate_failures do
+      expect(Agentf::Agents::Architect.writes_code?).to be false
+      expect(Agentf::Agents::Debugger.writes_code?).to be false
+      expect(Agentf::Agents::Reviewer.writes_code?).to be false
+      expect(Agentf::Agents::Explorer.writes_code?).to be false
+    end
+  end
+
+  describe "TDD policy enforcement for code-writing agents" do
+    it "Specialist always includes red/green test requirements in policy", :aggregate_failures do
+      always = Agentf::Agents::Specialist.policy_boundaries["always"]
+      never  = Agentf::Agents::Specialist.policy_boundaries["never"]
+
+      expect(always).to include(a_string_matching(/failing spec/i))
+      expect(always).to include(a_string_matching(/red/i))
+      expect(always).to include(a_string_matching(/green/i))
+      expect(never).to include(a_string_matching(/without a corresponding spec/i))
+    end
+
+    it "Designer always includes red/green test requirements in policy", :aggregate_failures do
+      always = Agentf::Agents::Designer.policy_boundaries["always"]
+      never  = Agentf::Agents::Designer.policy_boundaries["never"]
+
+      expect(always).to include(a_string_matching(/failing spec/i))
+      expect(always).to include(a_string_matching(/red/i))
+      expect(always).to include(a_string_matching(/green/i))
+      expect(never).to include(a_string_matching(/without a corresponding spec/i))
+    end
+
+    it "Tester always includes red/green test requirements in policy", :aggregate_failures do
+      always = Agentf::Agents::Tester.policy_boundaries["always"]
+      never  = Agentf::Agents::Tester.policy_boundaries["never"]
+
+      expect(always).to include(a_string_matching(/failing spec/i))
+      expect(always).to include(a_string_matching(/red/i))
+      expect(always).to include(a_string_matching(/green/i))
+      expect(never).to include(a_string_matching(/without a corresponding spec/i))
+    end
+  end
+end

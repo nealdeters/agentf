@@ -83,6 +83,7 @@ end
 
 # Load submodules
 require_relative "agentf/memory"
+require_relative "agentf/memory/confirmation_handler"
 require_relative "agentf/tools"
 require_relative "agentf/commands"
 require_relative "agentf/commands/registry"

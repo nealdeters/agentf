@@ -19,6 +19,7 @@ module Agentf
             { "name" => "get_lessons", "type" => "function" },
             { "name" => "get_by_type", "type" => "function" },
             { "name" => "get_by_agent", "type" => "function" },
+            { "name" => "get_intents", "type" => "function" },
             { "name" => "search", "type" => "function" },
             { "name" => "get_summary", "type" => "function" },
             { "name" => "neighbors", "type" => "function" },
@@ -87,16 +88,15 @@ module Agentf
 
       # Get memories by agent
       def get_by_agent(agent, limit: 10)
-        memories = @memory.get_recent_memories(limit: 100)
-        filtered = memories.select { |m| m["agent"] == agent }
-        format_memories(filtered.first(limit))
+        memories = @memory.get_memories_by_agent(agent: agent, limit: limit)
+        format_memories(memories)
       rescue => e
         { "error" => e.message }
       end
 
-      # Search memories by keyword in title or description
-      def search(query, limit: 10)
-        format_memories(@memory.search_memories(query: query, limit: limit))
+      # Search memories semantically with optional type, agent, and outcome filters
+      def search(query, limit: 10, type: nil, agent: nil, outcome: nil)
+        format_memories(@memory.search_memories(query: query, limit: limit, type: type, agent: agent, outcome: outcome))
       rescue => e
         { "error" => e.message }
       end

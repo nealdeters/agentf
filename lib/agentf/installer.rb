@@ -150,7 +150,7 @@ module Agentf
 
       classes.map do |klass|
         target = File.join(root, layout.fetch("agents_dir"), layout.fetch("agent_filename").call(klass))
-        write_manifest(target, render_agent_manifest(klass, provider: provider))
+        write_manifest(target, render_agent_manifest(klass))
       end
     end
 
@@ -160,7 +160,7 @@ module Agentf
 
       manifests.map do |manifest|
         target = File.join(root, layout.fetch("commands_dir"), layout.fetch("command_filename").call(manifest))
-        write_manifest(target, render_command_manifest(manifest, provider: provider))
+        write_manifest(target, render_command_manifest(manifest))
       end
     end
 
@@ -237,7 +237,7 @@ module Agentf
       end
     end
 
-    def render_agent_manifest(klass, provider:)
+    def render_agent_manifest(klass)
       # Emit a minimal, stable manifest that acts as a pointer to the runtime
       # tool implemented by the plugin/CLI. Keep filename and `name` stable so
       # upgrades remain compatible with existing installs.
@@ -257,6 +257,9 @@ module Agentf
 
       description = klass.respond_to?(:description) ? klass.description.to_s.strip : ""
 
+      tdd_section = klass.respond_to?(:writes_code?) && klass.writes_code? ? tdd_requirement_section : ""
+      fallback = cli_fallback_section(klass)
+
       <<~MARKDOWN
         ---
         name: #{tool_name}
@@ -273,7 +276,50 @@ module Agentf
         do not retry the write.
 
         Policy Summary: #{policy_summary}
+        #{tdd_section}#{fallback}
+      MARKDOWN
+    end
 
+    def tdd_requirement_section
+      <<~MARKDOWN
+
+        ## TDD Requirement
+
+        This agent writes code. Every implementation MUST follow red/green discipline:
+
+        1. **Write the spec first** — create a failing test before any implementation code
+        2. **Run tests to confirm red** — verify the spec fails (`bundle exec rspec <spec_file>`)
+        3. **Implement the code** — write only enough to make the spec pass
+        4. **Run tests to confirm green** — verify all specs pass before reporting done
+        5. **Never skip** — do not create a class, method, or module without a corresponding spec file
+
+        Showing test output (red then green) is mandatory evidence of completion.
+      MARKDOWN
+    end
+
+    def cli_fallback_section(klass)
+      agent_name = klass.typed_name.downcase
+      read_cmds = READ_ACTIONS.values_at("get_recent_memories", "search").map { |a| "- `#{a[:cli]}`" }.join("\n")
+
+      write_actions = Array(klass.respond_to?(:memory_concepts) ? klass.memory_concepts["writes"] : [])
+        .map { |item| item.to_s.split("#").last }
+        .filter_map { |key| WRITE_ACTIONS[key] }
+        .map { |a| "- `#{a[:cli].gsub("<AGENT>", agent_name.upcase)}`" }
+        .join("\n")
+
+      write_section = write_actions.empty? ? "" : "\n**Memory writes**:\n#{write_actions}\n"
+
+      <<~MARKDOWN
+
+        ## CLI Fallback
+
+        If the `agentf` MCP server is unavailable, run equivalent commands directly in the terminal:
+
+        **Run this agent**: `agentf agent #{agent_name} "<input>"`
+
+        **Memory reads**:
+        #{read_cmds}
+        #{write_section}
       MARKDOWN
     end
 
@@ -329,9 +375,10 @@ module Agentf
       "agentf-#{name.to_s.downcase}"
     end
 
-    def render_command_manifest(manifest, provider:)
+    def render_command_manifest(manifest)
       cmd_name = command_identifier(manifest.fetch("name"))
       desc = manifest.fetch("description", "").to_s.strip
+      fallback = command_cli_fallback_section(manifest)
 
       <<~MARKDOWN
         ---
@@ -342,7 +389,45 @@ module Agentf
 
         IMPORTANT: Do not embed runtime logic here. Invoke the `#{cmd_name}` tool to perform
         any codebase or memory operations.
+        #{fallback}
+      MARKDOWN
+    end
 
+    def command_cli_fallback_section(manifest)
+      name = manifest.fetch("name")
+      cli_lines = case name
+                  when "explorer"
+                    [
+                      "`agentf code glob \"<pattern>\"`",
+                      "`agentf code grep \"<pattern>\"`",
+                      "`agentf code tree --depth=3`",
+                      "`agentf code related <file>`"
+                    ]
+                  when "memory"
+                    [
+                      "`#{READ_ACTIONS.fetch('get_recent_memories')[:cli]}`",
+                      "`#{READ_ACTIONS.fetch('search')[:cli]}`",
+                      "`#{READ_ACTIONS.fetch('get_episodes')[:cli]}`",
+                      "`#{WRITE_ACTIONS.fetch('store_lesson')[:cli]}`",
+                      "`#{WRITE_ACTIONS.fetch('store_episode')[:cli]}`"
+                    ]
+                  else
+                    [
+                      "`agentf code glob \"<pattern>\"`",
+                      "`#{READ_ACTIONS.fetch('get_recent_memories')[:cli]}`",
+                      "`#{READ_ACTIONS.fetch('search')[:cli]}`"
+                    ]
+                  end
+
+      tool_lines = cli_lines.map { |cmd| "- #{cmd}" }.join("\n")
+
+      <<~MARKDOWN
+
+        ## CLI Fallback
+
+        If the `agentf` MCP server is unavailable, run equivalent commands directly in the terminal:
+
+        #{tool_lines}
       MARKDOWN
     end
 

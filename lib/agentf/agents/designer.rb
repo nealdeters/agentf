@@ -45,12 +45,26 @@ module Agentf
 
       def self.policy_boundaries
         {
-          "always" => ["Return generated component details", "Persist successful implementation pattern"],
+          "always" => [
+            "Return generated component details",
+            "Persist successful implementation pattern",
+            "Write a failing spec before implementing any new component or function (red)",
+            "Run the test suite to confirm the spec fails before writing implementation",
+            "Run the test suite again after implementation to confirm green"
+          ],
           "ask_first" => ["Changing primary UI framework", "Persisting successful implementation patterns to memory"],
-          "never" => ["Return empty generated code for successful design task"],
+          "never" => [
+            "Return empty generated code for successful design task",
+            "Create a new component or function without a corresponding spec file",
+            "Skip red/green verification when writing or modifying code"
+          ],
           "required_inputs" => ["design_spec"],
           "required_outputs" => ["component", "generated_code", "success"]
         }
+      end
+
+      def self.writes_code?
+        true
       end
 
       def initialize(memory, commands: nil)

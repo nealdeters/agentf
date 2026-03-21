@@ -20,6 +20,7 @@ module Agentf
     #   AGENTF_MCP_ALLOW_WRITES   - true/false, controls memory write tools
     #   AGENTF_MCP_MAX_ARG_LENGTH - max length per string argument
     class Server
+      include Agentf::Memory::ConfirmationHandler
       ToolDefinition = Struct.new(:name, :description, :arguments, :handler, keyword_init: true)
 
       class ToolBuilder
@@ -189,21 +190,20 @@ module Agentf
         agentf-memory-episodes
         agentf-memory-lessons
         agentf-memory-intents
-        agentf-memory-business-intents
-        agentf-memory-feature-intents
+        agentf-memory-summary
         agentf-memory-neighbors
         agentf-memory-subgraph
+        agentf-memory-add-intent
+        agentf-memory-add-episode
         agentf-memory-add-playbook
         agentf-memory-add-lesson
-        agentf-memory-add-business-intent
-        agentf-memory-add-feature-intent
       ].freeze
 
       WRITE_TOOLS = Set.new(%w[
+        agentf-memory-add-intent
+        agentf-memory-add-episode
         agentf-memory-add-playbook
         agentf-memory-add-lesson
-        agentf-memory-add-business-intent
-        agentf-memory-add-feature-intent
       ]).freeze
 
       attr_reader :server, :guardrails
@@ -215,25 +215,6 @@ module Agentf
         @memory   = memory   || Agentf::Memory::RedisMemory.new
         @guardrails = build_guardrails(env)
         @server = build_server
-      end
-
-      # Helper to centralize confirmation handling for MCP server write tools.
-      # Yields the block that performs the memory write and returns either the
-      # block result or the normalized confirmation hash produced by
-      # Agentf::Agents::Base#safe_memory_write.
-      def safe_mcp_memory_write(memory, attempted: {})
-        begin
-          yield
-          nil
-        rescue Agentf::Memory::RedisMemory::ConfirmationRequired => e
-          {
-            "confirmation_required" => true,
-            "confirmation_details" => e.details,
-            "attempted" => attempted,
-            "confirmed_write_token" => "confirmed",
-            "confirmation_prompt" => "Ask the user whether to save this memory. If they approve, call the same tool again after confirmation. If they decline, do not retry."
-          }
-        end
       end
 
       # Start the stdio read loop (blocks until stdin closes).
@@ -388,12 +369,15 @@ module Agentf
         end
 
         s.tool("agentf-memory-search") do
-          description "Search memories semantically."
+          description "Search memories semantically. Supports optional filters for type, agent, and outcome."
           argument :query, String, required: true, description: "Search query"
           argument :limit, Integer, required: false, description: "How many results to return (1-100)"
+          argument :type, String, required: false, description: "Filter by type: episode|lesson|playbook|business_intent|feature_intent|incident"
+          argument :agent, String, required: false, description: "Filter by agent name"
+          argument :outcome, String, required: false, description: "Filter by outcome: positive|negative|neutral"
           call do |args|
             mcp_server.send(:guard!, "agentf-memory-search", **args)
-            result = reviewer.search(args[:query], limit: args[:limit] || 10)
+            result = reviewer.search(args[:query], limit: args[:limit] || 10, type: args[:type], agent: args[:agent], outcome: args[:outcome])
             JSON.generate(result)
           end
         end
@@ -442,7 +426,7 @@ module Agentf
         end
 
         s.tool("agentf-memory-intents") do
-          description "List intents (business|feature)."
+          description "List intents (business|feature). Pass kind to filter."
           argument :kind, String, required: false, description: "Optional: business|feature"
           argument :limit, Integer, required: false, description: "How many results to return (1-100)"
           call do |args|
@@ -481,61 +465,85 @@ module Agentf
           end
         end
 
-        s.tool("agentf-memory-add-business-intent") do
-          description "Store a business intent in Redis."
+        s.tool("agentf-memory-add-intent") do
+          description "Store a business or feature intent. Pass kind: business or feature."
+          argument :kind, String, required: true, description: "Intent type: business|feature"
           argument :title, String, required: true, description: "Intent title"
           argument :description, String, required: true, description: "Intent description"
-          argument :constraints, Array, required: false, items: String, description: "Constraints"
-          argument :priority, Integer, required: false, description: "Priority"
+          argument :constraints, Array, required: false, items: String, description: "Business intent constraints"
+          argument :priority, Integer, required: false, description: "Business intent priority"
+          argument :acceptance, Array, required: false, items: String, description: "Feature intent acceptance criteria"
+          argument :non_goals, Array, required: false, items: String, description: "Feature intent non-goals"
+          argument :related_task_id, String, required: false, description: "Related task id (feature intents)"
           call do |args|
-            mcp_server.send(:guard!, "agentf-memory-add-business-intent", **args)
-              begin
-                id = nil
-                res = mcp_server.send(:safe_mcp_memory_write, memory, attempted: { tool: "agentf-memory-add-business-intent", args: args }) do
-                  id = memory.store_business_intent(
-                    title: args[:title],
-                    description: args[:description],
-                    constraints: args[:constraints] || [],
-                    priority: args[:priority] || 1
-                  )
-                end
-
-                if res.is_a?(Hash) && res["confirmation_required"]
-                  JSON.generate(confirmation_required: true, confirmation_details: res["confirmation_details"], attempted: res["attempted"])
-                else
-                  JSON.generate(id: id, type: "business_intent", status: "stored")
-                end
-              end
+            mcp_server.send(:guard!, "agentf-memory-add-intent", **args)
+            id = nil
+            kind = args[:kind].to_s.downcase
+            res = mcp_server.send(:safe_memory_write, memory, attempted: { tool: "agentf-memory-add-intent", args: args }) do
+              id = case kind
+                   when "business"
+                     memory.store_business_intent(
+                       title: args[:title],
+                       description: args[:description],
+                       constraints: args[:constraints] || [],
+                       priority: args[:priority] || 1
+                     )
+                   when "feature"
+                     memory.store_feature_intent(
+                       title: args[:title],
+                       description: args[:description],
+                       acceptance_criteria: args[:acceptance] || [],
+                       non_goals: args[:non_goals] || [],
+                       related_task_id: args[:related_task_id]
+                     )
+                   else
+                     raise ArgumentError, "kind must be business or feature, got: #{kind}"
+                   end
+            end
+            if res.is_a?(Hash) && res["confirmation_required"]
+              JSON.generate(confirmation_required: true, confirmation_details: res["confirmation_details"], attempted: res["attempted"])
+            else
+              JSON.generate(id: id, type: "#{kind}_intent", status: "stored")
+            end
           end
         end
 
-        s.tool("agentf-memory-add-feature-intent") do
-          description "Store a feature intent in Redis."
-          argument :title, String, required: true, description: "Intent title"
-          argument :description, String, required: true, description: "Intent description"
-          argument :acceptance, Array, required: false, items: String, description: "Acceptance criteria"
-          argument :non_goals, Array, required: false, items: String, description: "Non-goals"
-          argument :related_task_id, String, required: false, description: "Related task id"
+        s.tool("agentf-memory-add-episode") do
+          description "Store a memory episode with type and outcome (type: episode|lesson|incident|playbook, outcome: positive|negative|neutral)."
+          argument :type, String, required: true, description: "Episode type: episode|lesson|incident|playbook"
+          argument :title, String, required: true, description: "Episode title"
+          argument :description, String, required: true, description: "Episode description"
+          argument :outcome, String, required: false, description: "Outcome: positive|negative|neutral"
+          argument :agent, String, required: false, description: "Agent name"
+          argument :context, String, required: false, description: "Additional context"
+          argument :code_snippet, String, required: false, description: "Code snippet"
           call do |args|
-            mcp_server.send(:guard!, "agentf-memory-add-feature-intent", **args)
-              begin
-                id = nil
-                res = mcp_server.send(:safe_mcp_memory_write, memory, attempted: { tool: "agentf-memory-add-feature-intent", args: args }) do
-                  id = memory.store_feature_intent(
-                    title: args[:title],
-                    description: args[:description],
-                    acceptance_criteria: args[:acceptance] || [],
-                    non_goals: args[:non_goals] || [],
-                    related_task_id: args[:related_task_id]
-                  )
-                end
+            mcp_server.send(:guard!, "agentf-memory-add-episode", **args)
+            id = nil
+            res = mcp_server.send(:safe_memory_write, memory, attempted: { tool: "agentf-memory-add-episode", args: args }) do
+              id = memory.store_episode(
+                type: args[:type],
+                title: args[:title],
+                description: args[:description],
+                outcome: args[:outcome],
+                agent: args[:agent] || Agentf::AgentRoles::ENGINEER,
+                context: args[:context].to_s,
+                code_snippet: args[:code_snippet].to_s
+              )
+            end
+            if res.is_a?(Hash) && res["confirmation_required"]
+              JSON.generate(confirmation_required: true, confirmation_details: res["confirmation_details"], attempted: res["attempted"])
+            else
+              JSON.generate(id: id, type: args[:type], status: "stored")
+            end
+          end
+        end
 
-                if res.is_a?(Hash) && res["confirmation_required"]
-                  JSON.generate(confirmation_required: true, confirmation_details: res["confirmation_details"], attempted: res["attempted"])
-                else
-                  JSON.generate(id: id, type: "feature_intent", status: "stored")
-                end
-              end
+        s.tool("agentf-memory-summary") do
+          description "Get summary statistics: counts of memories by type, agent, and outcome."
+          call do |_args|
+            mcp_server.send(:guard!, "agentf-memory-summary")
+            JSON.generate(reviewer.get_summary)
           end
         end
 
@@ -602,7 +610,7 @@ module Agentf
             mcp_server.send(:guard!, "agentf-memory-add-lesson", **args)
               begin
                 id = nil
-                res = mcp_server.send(:safe_mcp_memory_write, memory, attempted: { tool: "agentf-memory-add-lesson", args: args }) do
+                res = mcp_server.send(:safe_memory_write, memory, attempted: { tool: "agentf-memory-add-lesson", args: args }) do
                   id = memory.store_episode(
                     type: "lesson",
                     title: args[:title],
@@ -639,7 +647,7 @@ module Agentf
             mcp_server.send(:guard!, "agentf-memory-add-playbook", **args)
               begin
                 id = nil
-                res = mcp_server.send(:safe_mcp_memory_write, memory, attempted: { tool: "agentf-memory-add-playbook", args: args }) do
+                res = mcp_server.send(:safe_memory_write, memory, attempted: { tool: "agentf-memory-add-playbook", args: args }) do
                   id = memory.store_playbook(
                     title: args[:title],
                     description: args[:description],

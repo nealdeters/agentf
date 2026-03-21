@@ -12,6 +12,7 @@ module Agentf
     #   - by_type accepts business_intent and feature_intent (finding #11)
     class Memory
       include ArgParser
+      include Agentf::Memory::ConfirmationHandler
 
       VALID_EPISODE_TYPES = %w[episode lesson playbook business_intent feature_intent incident].freeze
 
@@ -38,6 +39,10 @@ module Agentf
           list_business_intents(args)
         when "feature-intents"
           list_feature_intents(args)
+        when "add-intent"
+          add_intent(args)
+        when "add-episode"
+          add_episode_direct(args)
         when "add-business-intent"
           add_business_intent(args)
         when "add-feature-intent"
@@ -119,6 +124,24 @@ module Agentf
         output(@reviewer.get_feature_intents(limit: limit))
       end
 
+      def add_intent(args)
+        kind = args.shift.to_s.downcase
+        unless %w[business feature].include?(kind)
+          $stderr.puts "Error: add-intent requires kind (business|feature) as first argument"
+          exit 1
+        end
+        kind == "business" ? add_business_intent(args) : add_feature_intent(args)
+      end
+
+      def add_episode_direct(args)
+        type = args.shift.to_s
+        unless VALID_EPISODE_TYPES.include?(type)
+          $stderr.puts "Error: add-episode requires type as first argument (#{VALID_EPISODE_TYPES.join('|')})"
+          exit 1
+        end
+        add_episode(type, args)
+      end
+
       def add_business_intent(args)
         title = args.shift
         description = args.shift
@@ -132,7 +155,7 @@ module Agentf
         priority = parse_integer_option(args, "--priority=", default: 1)
 
         id = nil
-        res = safe_cli_memory_write(@memory, attempted: { command: "add-business-intent", args: { title: title, description: description, constraints: constraints, priority: priority } }) do
+        res = safe_memory_write(@memory, attempted: { command: "add-business-intent", args: { title: title, description: description, constraints: constraints, priority: priority } }) do
           id = @memory.store_business_intent(
             title: title,
             description: description,
@@ -171,7 +194,7 @@ module Agentf
         related_task_id = parse_single_option(args, "--task=")
 
         id = nil
-        res = safe_cli_memory_write(@memory, attempted: { command: "add-feature-intent", args: { title: title, description: description, acceptance: acceptance_criteria, non_goals: non_goals, related_task_id: related_task_id } }) do
+        res = safe_memory_write(@memory, attempted: { command: "add-feature-intent", args: { title: title, description: description, acceptance: acceptance_criteria, non_goals: non_goals, related_task_id: related_task_id } }) do
           id = @memory.store_feature_intent(
             title: title,
             description: description,
@@ -211,7 +234,7 @@ module Agentf
         agent = parse_single_option(args, "--agent=") || Agentf::AgentRoles::PLANNER
 
         id = nil
-        res = safe_cli_memory_write(@memory, attempted: { command: "add-playbook", args: { title: title, description: description, steps: steps, feature_area: feature_area, agent: agent } }) do
+        res = safe_memory_write(@memory, attempted: { command: "add-playbook", args: { title: title, description: description, steps: steps, feature_area: feature_area, agent: agent } }) do
           id = @memory.store_playbook(
             title: title,
             description: description,
@@ -252,7 +275,7 @@ module Agentf
         outcome = parse_single_option(args, "--outcome=")
 
         id = nil
-        res = safe_cli_memory_write(@memory, attempted: { command: "add-#{type}", args: { title: title, description: description, context: context, agent: agent, code: code_snippet, outcome: outcome } }) do
+        res = safe_memory_write(@memory, attempted: { command: "add-#{type}", args: { title: title, description: description, context: context, agent: agent, code: code_snippet, outcome: outcome } }) do
           id = @memory.store_episode(
             type: type,
             title: title,
@@ -277,22 +300,6 @@ module Agentf
           puts JSON.generate({ "id" => id, "type" => type, "status" => "stored" })
         else
           puts "Stored #{type}: #{id}"
-        end
-      end
-
-      # Helper to standardize CLI memory write confirmation handling.
-      def safe_cli_memory_write(memory, attempted: {})
-        begin
-          yield
-          nil
-        rescue Agentf::Memory::RedisMemory::ConfirmationRequired => e
-          {
-            "confirmation_required" => true,
-            "confirmation_details" => e.details,
-            "attempted" => attempted,
-            "confirmed_write_token" => "confirmed",
-            "confirmation_prompt" => "Ask the user whether to save this memory. If they approve, rerun the same command with confirmation enabled. If they decline, do not retry."
-          }
         end
       end
 
@@ -561,10 +568,8 @@ module Agentf
             episodes                  List episode memories
             lessons                   List lessons learned
             intents [kind]            List intents (kind: business|feature)
-            business-intents          List business intents
-            feature-intents           List feature intents
-            add-business-intent       Store business intent
-            add-feature-intent        Store feature intent
+            add-intent <kind>         Store intent (kind: business|feature)
+            add-episode <type>        Store episode (type: #{VALID_EPISODE_TYPES.join("|")}) with --outcome=
             add-playbook              Store playbook memory
             add-lesson                Store lesson memory
             search <query>            Search memories semantically
@@ -585,11 +590,13 @@ module Agentf
             agentf memory recent -n 5
             agentf memory episodes --outcome=negative
             agentf memory intents business -n 5
-            agentf memory add-business-intent "Reliability" "Prioritize uptime" --constraints="No downtime;No vendor lock-in"
-            agentf memory add-feature-intent "Agent handoff" "Improve orchestrator continuity" --acceptance="Keeps context;Preserves task state"
+            agentf memory add-intent business "Reliability" "Prioritize uptime" --constraints="No downtime;No vendor lock-in"
+            agentf memory add-intent feature "Agent handoff" "Improve continuity" --acceptance="Keeps context;Preserves task state"
+            agentf memory add-episode lesson "Refactor strategy" "Extracted adapter seam" --agent=PLANNER --outcome=positive
+            agentf memory add-episode incident "Auth regression" "JWT expiry not checked" --outcome=negative
             agentf memory add-playbook "Release rollout" "Safe deploy sequence" --steps="deploy canary;monitor;promote"
             agentf memory add-lesson "Refactor strategy" "Extracted adapter seam" --agent=PLANNER
-            agentf memory search "react"
+            agentf memory search "react" --type=lesson --outcome=positive
             agentf memory delete id episode_abcd
             agentf memory delete last -n 10 --scope=project
             agentf memory delete all --scope=all --yes

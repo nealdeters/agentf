@@ -282,6 +282,12 @@ module Agentf
         end
       end
 
+      def get_memories_by_agent(agent:, limit: 10)
+        collect_episode_records(scope: "project", agent: agent)
+          .sort_by { |mem| -(mem["created_at"] || 0) }
+          .first(limit)
+      end
+
       def get_intents(kind: nil, limit: 10)
         return get_memories_by_type(type: "business_intent", limit: limit) if kind == "business"
         return get_memories_by_type(type: "feature_intent", limit: limit) if kind == "feature"
