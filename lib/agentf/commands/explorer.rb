@@ -47,10 +47,18 @@ module Agentf
 
       # Search for pattern in files
       def grep(pattern, file_pattern: nil, context_lines: 2)
-        cmd = ["grep", "-rn"]
-        cmd << "--include=#{file_pattern || '*'}" if file_pattern
-        cmd << pattern
-        cmd << @base_path
+        use_rg = system("which rg > /dev/null 2>&1")
+
+        if use_rg
+          cmd = ["rg", "-n", "--no-heading", "--color", "never", "-C", context_lines.to_s, "--hidden", "--no-ignore"]
+          cmd += ["--glob", file_pattern] if file_pattern
+          cmd += [pattern, @base_path]
+        else
+          cmd = ["grep", "-rn"]
+          cmd << "--include=#{file_pattern || '*'}" if file_pattern
+          cmd += ["-C", context_lines.to_s] if context_lines && context_lines > 0
+          cmd += [pattern, @base_path]
+        end
 
         stdout, _stderr, _status = Open3.capture3(*cmd)
 
