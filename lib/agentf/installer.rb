@@ -19,11 +19,19 @@ module Agentf
     }.freeze
 
     WRITE_ACTIONS = {
-      "store_lesson" => { cli: "agentf memory add-lesson \"<title>\" \"<description>\" --agent=<AGENT>", tool: "agentf-memory-add-lesson" },
-      "store_episode" => { cli: "agentf memory add-episode \"<title>\" \"<description>\" --outcome=positive --agent=<AGENT>", tool: "agentf-memory-episodes" },
-      "store_playbook" => { cli: "agentf memory add-playbook \"<title>\" \"<description>\" --steps=\"<step1>;<step2>\"", tool: "agentf-memory-add-playbook" },
-      "store_business_intent" => { cli: "agentf memory add-business-intent \"<title>\" \"<description>\"", tool: "agentf-memory-add-business-intent" },
-      "store_feature_intent" => { cli: "agentf memory add-feature-intent \"<title>\" \"<description>\" --acceptance=\"<criteria>\"", tool: "agentf-memory-add-feature-intent" }
+      "store_lesson" => { cli: "agentf memory add-lesson \"<title>\" \"<description>\" --agent=<AGENT>",
+                          tool: "agentf-memory-add-lesson" },
+      "store_episode" => {
+        cli: "agentf memory add-episode \"<title>\" \"<description>\" --outcome=positive --agent=<AGENT>", tool: "agentf-memory-episodes"
+      },
+      "store_playbook" => {
+        cli: "agentf memory add-playbook \"<title>\" \"<description>\" --steps=\"<step1>;<step2>\"", tool: "agentf-memory-add-playbook"
+      },
+      "store_business_intent" => { cli: "agentf memory add-business-intent \"<title>\" \"<description>\"",
+                                   tool: "agentf-memory-add-business-intent" },
+      "store_feature_intent" => {
+        cli: "agentf memory add-feature-intent \"<title>\" \"<description>\" --acceptance=\"<criteria>\"", tool: "agentf-memory-add-feature-intent"
+      }
     }.freeze
 
     PROVIDER_LAYOUTS = {
@@ -33,17 +41,18 @@ module Agentf
         "plugin_dir" => ".opencode/plugins",
         "memory_dir" => ".opencode/memory",
         "agent_filename" => ->(klass) { "agentf-#{klass.typed_name.downcase}.md" },
-        "command_filename" => ->(manifest) { "agentf-#{manifest.fetch('name')}.md" }
+        "command_filename" => ->(manifest) { "agentf-#{manifest.fetch("name")}.md" }
       },
       "copilot" => {
-        "agents_dir" => ".github/agents",
-        "commands_dir" => ".github/commands",
-        "agent_filename" => ->(klass) { "#{klass.typed_name.downcase}.agent.md" },
-        "command_filename" => ->(manifest) { "#{manifest.fetch('name')}.md" }
+        "agents_dir" => nil,
+        "commands_dir" => nil,
+        "agent_filename" => ->(_klass) { nil },
+        "command_filename" => ->(_manifest) { nil }
       }
     }.freeze
 
-    def initialize(global_root: Dir.home, local_root: Dir.pwd, dry_run: false, verbose: false, install_deps: true, opencode_runtime: "mcp")
+    def initialize(global_root: Dir.home, local_root: Dir.pwd, dry_run: false, verbose: false, install_deps: true,
+                   opencode_runtime: "mcp")
       @global_root = global_root
       @local_root = local_root
       @dry_run = dry_run
@@ -72,7 +81,7 @@ module Agentf
 
     def install_for_provider(provider:, scope:, only_agents:, only_commands:)
       layout = PROVIDER_LAYOUTS.fetch(provider.to_s) do
-        raise ArgumentError, "Unknown provider: #{provider}. Valid: #{PROVIDER_LAYOUTS.keys.join(', ')}"
+        raise ArgumentError, "Unknown provider: #{provider}. Valid: #{PROVIDER_LAYOUTS.keys.join(", ")}"
       end
 
       writes = []
@@ -110,13 +119,17 @@ module Agentf
       end
 
       managers = [
-        { cmd: ["bun", "install"], check: ["bun", "--version"] },
-        { cmd: ["npm", "install"], check: ["npm", "--version"] },
-        { cmd: ["yarn", "install"], check: ["yarn", "--version"] }
+        { cmd: %w[bun install], check: ["bun", "--version"] },
+        { cmd: %w[npm install], check: ["npm", "--version"] },
+        { cmd: %w[yarn install], check: ["yarn", "--version"] }
       ]
 
       managers.each do |m|
-        stdout, stderr, status = Open3.capture3(*m[:check])
+        begin
+          _, _, status = Open3.capture3(*m[:check])
+        rescue Errno::ENOENT
+          next
+        end
         next unless status.success?
 
         puts "Running #{m[:cmd].first} install in #{pkg_dir}" if @verbose
@@ -145,6 +158,8 @@ module Agentf
     end
 
     def write_agents(root:, layout:, provider:, only_agents:)
+      return [] unless layout["agents_dir"]
+
       classes = discover_agents
       classes = classes.select { |klass| only_agents.include?(klass.typed_name.downcase) } if only_agents
 
@@ -155,8 +170,14 @@ module Agentf
     end
 
     def write_commands(root:, layout:, provider:, only_commands:)
+      return [] unless layout["commands_dir"]
+
       manifests = discover_commands
-      manifests = manifests.select { |manifest| only_commands.include?(manifest.fetch("name").downcase) } if only_commands
+      if only_commands
+        manifests = manifests.select do |manifest|
+          only_commands.include?(manifest.fetch("name").downcase)
+        end
+      end
 
       manifests.map do |manifest|
         target = File.join(root, layout.fetch("commands_dir"), layout.fetch("command_filename").call(manifest))
@@ -196,7 +217,11 @@ module Agentf
     def write_copilot_helpers(root:)
       return [] unless root == @local_root
 
-      [write_copilot_mcp_json(root)]
+      [
+        write_copilot_mcp_json(root),
+        write_manifest(File.join(root, ".github", "copilot-instructions.md"), render_copilot_instructions),
+        write_manifest(File.join(root, "AGENTS.md"), render_copilot_agents_md)
+      ]
     end
 
     def opencode_plugin_runtime?
@@ -205,31 +230,27 @@ module Agentf
 
     def discover_agents
       Agentf::Agents.constants
-        .map { |const| Agentf::Agents.const_get(const) }
-        .select { |value| value.is_a?(Class) && value < Agentf::Agents::Base }
-        .reject { |klass| klass == Agentf::Agents::Base }
-        .sort_by(&:typed_name)
+                    .map { |const| Agentf::Agents.const_get(const) }
+                    .select { |value| value.is_a?(Class) && value < Agentf::Agents::Base }
+                    .reject { |klass| klass == Agentf::Agents::Base }
+                    .sort_by(&:typed_name)
     end
 
     def discover_commands
       Agentf::Commands.constants
-        .map { |const| Agentf::Commands.const_get(const) }
-        .select { |value| value.is_a?(Class) && value.respond_to?(:manifest) }
-        .map(&:manifest)
-        .sort_by { |manifest| manifest.fetch("name") }
+                      .map { |const| Agentf::Commands.const_get(const) }
+                      .select { |value| value.is_a?(Class) && value.respond_to?(:manifest) }
+                      .map(&:manifest)
+                      .sort_by { |manifest| manifest.fetch("name") }
     end
 
     def write_manifest(path, payload)
-      if @dry_run
-        return { "path" => path, "status" => "planned" }
-      end
+      return { "path" => path, "status" => "planned" } if @dry_run
 
       FileUtils.mkdir_p(File.dirname(path))
       begin
         File.write(path, payload)
-        if @verbose
-          puts "WROTE: #{path}"
-        end
+        puts "WROTE: #{path}" if @verbose
         { "path" => path, "status" => "written" }
       rescue StandardError => e
         warn "ERROR writing #{path}: #{e.message}"
@@ -302,10 +323,10 @@ module Agentf
       read_cmds = READ_ACTIONS.values_at("get_recent_memories", "search").map { |a| "- `#{a[:cli]}`" }.join("\n")
 
       write_actions = Array(klass.respond_to?(:memory_concepts) ? klass.memory_concepts["writes"] : [])
-        .map { |item| item.to_s.split("#").last }
-        .filter_map { |key| WRITE_ACTIONS[key] }
-        .map { |a| "- `#{a[:cli].gsub("<AGENT>", agent_name.upcase)}`" }
-        .join("\n")
+                      .map { |item| item.to_s.split("#").last }
+                      .filter_map { |key| WRITE_ACTIONS[key] }
+                      .map { |a| "- `#{a[:cli].gsub("<AGENT>", agent_name.upcase)}`" }
+                      .join("\n")
 
       write_section = write_actions.empty? ? "" : "\n**Memory writes**:\n#{write_actions}\n"
 
@@ -343,12 +364,8 @@ module Agentf
         actions << action if action
       end
 
-      if actions.none? { |a| a.start_with?("- Read:") }
-        actions << "- Read: Use `agentf-memory-recent` tool"
-      end
-      if actions.none? { |a| a.start_with?("- Write:") }
-        actions << "- Write: Use `agentf-memory-add-lesson` tool"
-      end
+      actions << "- Read: Use `agentf-memory-recent` tool" if actions.none? { |a| a.start_with?("- Read:") }
+      actions << "- Write: Use `agentf-memory-add-lesson` tool" if actions.none? { |a| a.start_with?("- Write:") }
 
       actions
     end
@@ -405,17 +422,17 @@ module Agentf
                     ]
                   when "memory"
                     [
-                      "`#{READ_ACTIONS.fetch('get_recent_memories')[:cli]}`",
-                      "`#{READ_ACTIONS.fetch('search')[:cli]}`",
-                      "`#{READ_ACTIONS.fetch('get_episodes')[:cli]}`",
-                      "`#{WRITE_ACTIONS.fetch('store_lesson')[:cli]}`",
-                      "`#{WRITE_ACTIONS.fetch('store_episode')[:cli]}`"
+                      "`#{READ_ACTIONS.fetch("get_recent_memories")[:cli]}`",
+                      "`#{READ_ACTIONS.fetch("search")[:cli]}`",
+                      "`#{READ_ACTIONS.fetch("get_episodes")[:cli]}`",
+                      "`#{WRITE_ACTIONS.fetch("store_lesson")[:cli]}`",
+                      "`#{WRITE_ACTIONS.fetch("store_episode")[:cli]}`"
                     ]
                   else
                     [
                       "`agentf code glob \"<pattern>\"`",
-                      "`#{READ_ACTIONS.fetch('get_recent_memories')[:cli]}`",
-                      "`#{READ_ACTIONS.fetch('search')[:cli]}`"
+                      "`#{READ_ACTIONS.fetch("get_recent_memories")[:cli]}`",
+                      "`#{READ_ACTIONS.fetch("search")[:cli]}`"
                     ]
                   end
 
@@ -452,12 +469,12 @@ module Agentf
 
       command_name = manifest.fetch("name")
       recommended_tools = case command_name
-                           when "explorer"
-                             "`agentf-code-glob`, `agentf-code-grep`, `agentf-code-tree`, `agentf-code-related-files`"
-                            when "memory"
-                              "`agentf-memory-recent`, `agentf-memory-search`, `agentf-memory-episodes`, `agentf-memory-add-lesson`, `agentf-memory-add-playbook`"
-                           else
-                             "`agentf-code-glob`, `agentf-code-grep`, `agentf-memory-recent`, `agentf-memory-search`"
+                          when "explorer"
+                            "`agentf-code-glob`, `agentf-code-grep`, `agentf-code-tree`, `agentf-code-related-files`"
+                          when "memory"
+                            "`agentf-memory-recent`, `agentf-memory-search`, `agentf-memory-episodes`, `agentf-memory-add-lesson`, `agentf-memory-add-playbook`"
+                          else
+                            "`agentf-code-glob`, `agentf-code-grep`, `agentf-memory-recent`, `agentf-memory-search`"
                           end
 
       <<~MARKDOWN
@@ -513,17 +530,17 @@ module Agentf
 
     def render_opencode_plugin
       <<~'TYPESCRIPT'
-      declare module "@opencode-ai/plugin" {
-        export type Plugin = (input: any) => Promise<any>;
+        declare module "@opencode-ai/plugin" {
+          export type Plugin = (input: any) => Promise<any>;
 
-        // Minimal `tool` factory type used by our plugin. Keep very loose to avoid
-        // coupling to the full SDK types in this repo.
-        export function tool(def: any): any;
+          // Minimal `tool` factory type used by our plugin. Keep very loose to avoid
+          // coupling to the full SDK types in this repo.
+          export function tool(def: any): any;
 
-        export const schema: any;
+          export const schema: any;
 
-        export default {} as { tool: typeof tool; schema: any };
-      }
+          export default {} as { tool: typeof tool; schema: any };
+        }
       TYPESCRIPT
     end
 
@@ -1060,14 +1077,59 @@ module Agentf
         end
       end
 
-      if new_content["mcp"]
-        merged["mcp"] = (existing["mcp"] || {}).merge(new_content["mcp"])
-      end
+      merged["mcp"] = (existing["mcp"] || {}).merge(new_content["mcp"]) if new_content["mcp"]
 
       write_manifest(path, JSON.pretty_generate(merged))
     end
 
-    def copilot_mcp_config(root)
+    def render_copilot_instructions
+      agent_names = discover_agents.map { |klass| "agentf-#{klass.typed_name.downcase}" }.join(", ")
+
+      <<~MARKDOWN
+        # agentf
+
+        This project uses [agentf](https://github.com/andreibondarev/agentf) for multi-agent workflows with shared persistent memory.
+
+        ## MCP Tools
+
+        The `agentf` MCP server (configured in `.vscode/mcp.json`) provides tools for memory and code discovery.
+
+        **Memory**: `agentf-memory-recent`, `agentf-memory-search`, `agentf-memory-episodes`, `agentf-memory-add-lesson`, `agentf-memory-add-episode`, `agentf-memory-add-playbook`
+
+        **Code**: `agentf-code-glob`, `agentf-code-grep`, `agentf-code-tree`, `agentf-code-related-files`
+
+        ## Agents
+
+        Available agents via MCP: #{agent_names}
+
+        Invoke agents with: `agentf agent <name> "<task>"`
+
+        ## Memory
+
+        Before starting a task, call `agentf-memory-recent` and `agentf-memory-search` to retrieve relevant context.
+        After completing a task, record outcomes with `agentf-memory-add-lesson` or `agentf-memory-add-episode`.
+      MARKDOWN
+    end
+
+    def render_copilot_agents_md
+      agents = discover_agents.map do |klass|
+        desc = klass.respond_to?(:description) ? klass.description.to_s.strip : ""
+        "- **agentf-#{klass.typed_name.downcase}**: #{desc}"
+      end.join("\n")
+
+      <<~MARKDOWN
+        # agentf Agents
+
+        This project uses agentf multi-agent workflows. The following agents are available via the `agentf` MCP server.
+
+        #{agents}
+
+        Use the MCP tools (`agentf-memory-recent`, `agentf-memory-search`, etc.) to access shared project memory.
+        Invoke an agent via: `agentf agent <name> "<task>"`
+      MARKDOWN
+    end
+
+    def copilot_mcp_config(_root)
       {
         "servers" => {
           "agentf" => {

@@ -14,7 +14,7 @@ RSpec.describe Agentf::Installer do
   end
 
   describe "#install" do
-    it "installs selected manifests to provider-specific local paths"  , :aggregate_failures do
+    it "installs selected manifests to provider-specific local paths", :aggregate_failures do
       installer = described_class.new(global_root: global_root, local_root: local_root)
 
       results = installer.install(
@@ -37,7 +37,7 @@ RSpec.describe Agentf::Installer do
       expect(content).to include("Policy Summary:")
     end
 
-    it "supports copilot file naming conventions"  , :aggregate_failures do
+    it "supports copilot file naming conventions", :aggregate_failures do
       installer = described_class.new(global_root: global_root, local_root: local_root)
 
       installer.install(
@@ -47,22 +47,27 @@ RSpec.describe Agentf::Installer do
         only_commands: ["debugger"]
       )
 
-      agent_manifest = File.join(local_root, ".github/agents/planner.agent.md")
-      command_manifest = File.join(local_root, ".github/commands/debugger.md")
+      copilot_instructions = File.join(local_root, ".github/copilot-instructions.md")
+      agents_md = File.join(local_root, "AGENTS.md")
       mcp_config = File.join(local_root, ".vscode/mcp.json")
 
-      expect(File).to exist(agent_manifest)
-      expect(File).to exist(command_manifest)
+      expect(File).to exist(copilot_instructions)
+      expect(File).to exist(agents_md)
       expect(File).to exist(mcp_config)
-      expect(File.read(agent_manifest)).to include("This manifest is a thin pointer.")
-      expect(File.read(agent_manifest)).to include("IMPORTANT: Use the `agentf-planner` tool")
-      expect(File.read(command_manifest)).to include("This is a thin command manifest")
+      expect(File.read(copilot_instructions)).to include("agentf")
+      expect(File.read(copilot_instructions)).to include("agentf-memory-recent")
+      expect(File.read(agents_md)).to include("agentf Agents")
+      expect(File.read(agents_md)).to include("agentf-planner")
       expect(JSON.parse(File.read(mcp_config)).dig("servers", "agentf", "type")).to eq("stdio")
       expect(JSON.parse(File.read(mcp_config)).dig("servers", "agentf", "command")).to eq("agentf")
       expect(JSON.parse(File.read(mcp_config)).dig("servers", "agentf", "args")).to eq(["mcp-server"])
+
+      # Copilot no longer writes per-agent or per-command files to .github/agents/ or .github/commands/
+      expect(File).not_to exist(File.join(local_root, ".github/agents/planner.agent.md"))
+      expect(File).not_to exist(File.join(local_root, ".github/commands/debugger.md"))
     end
 
-    it "merges copilot mcp.json server entries instead of overwriting"  , :aggregate_failures do
+    it "merges copilot mcp.json server entries instead of overwriting", :aggregate_failures do
       existing = {
         "servers" => {
           "other" => {
@@ -83,7 +88,7 @@ RSpec.describe Agentf::Installer do
       expect(merged.dig("servers", "agentf", "args")).to eq(["mcp-server"])
     end
 
-    it "bootstraps opencode mcp-first helper files by default"  , :aggregate_failures do
+    it "bootstraps opencode mcp-first helper files by default", :aggregate_failures do
       installer = described_class.new(global_root: global_root, local_root: local_root)
 
       installer.install(
@@ -105,11 +110,12 @@ RSpec.describe Agentf::Installer do
       opencode_config = JSON.parse(File.read(opencode_json))
       expect(opencode_config).to include("mcp")
       expect(opencode_config.dig("mcp", "agentf", "type")).to eq("local")
-      expect(opencode_config.dig("mcp", "agentf", "command")).to eq([File.join(local_root, "bin", "agentf"), "mcp-server"])
+      expect(opencode_config.dig("mcp", "agentf",
+                                 "command")).to eq([File.join(local_root, "bin", "agentf"), "mcp-server"])
       expect(File).not_to exist(File.join(local_root, ".opencode/plugins/agentf-plugin.ts"))
     end
 
-    it "merges opencode.json mcp entries instead of overwriting"  , :aggregate_failures do
+    it "merges opencode.json mcp entries instead of overwriting", :aggregate_failures do
       existing = {
         "$schema" => "https://opencode.ai/config.json",
         "mcp" => {
@@ -129,7 +135,7 @@ RSpec.describe Agentf::Installer do
       expect(merged.dig("mcp", "agentf", "command")).to eq([File.join(local_root, "bin", "agentf"), "mcp-server"])
     end
 
-    it "removes the legacy agentf plugin entry when switching to mcp mode"  , :aggregate_failures do
+    it "removes the legacy agentf plugin entry when switching to mcp mode", :aggregate_failures do
       existing = {
         "$schema" => "https://opencode.ai/config.json",
         "plugin" => [
@@ -147,7 +153,7 @@ RSpec.describe Agentf::Installer do
       expect(merged.dig("mcp", "agentf", "command")).to eq([File.join(local_root, "bin", "agentf"), "mcp-server"])
     end
 
-    it "can still install the legacy opencode plugin runtime when requested"  , :aggregate_failures do
+    it "can still install the legacy opencode plugin runtime when requested", :aggregate_failures do
       installer = described_class.new(global_root: global_root, local_root: local_root, opencode_runtime: "plugin")
 
       installer.install(
@@ -164,19 +170,28 @@ RSpec.describe Agentf::Installer do
       expect(opencode_json["plugin"]).to include("./.opencode/plugins/agentf-plugin")
     end
 
-    it "only installs opencode deps in legacy plugin mode"  , :aggregate_failures do
+    it "only installs opencode deps in legacy plugin mode", :aggregate_failures do
       default_installer = described_class.new(global_root: global_root, local_root: local_root, install_deps: true)
       default_results = default_installer.install(providers: ["opencode"], scope: "local")
 
-      expect(default_results).not_to satisfy { |arr| arr.any? { |r| r["status"] == "skipped" || r["status"] == "no_manager_found" || r["status"] == "installed" } }
+      expect(default_results).not_to(satisfy do |arr|
+        arr.any? do |r|
+          %w[skipped no_manager_found installed].include?(r["status"])
+        end
+      end)
 
-      plugin_installer = described_class.new(global_root: global_root, local_root: local_root, install_deps: true, opencode_runtime: "plugin")
+      plugin_installer = described_class.new(global_root: global_root, local_root: local_root, install_deps: true,
+                                             opencode_runtime: "plugin")
       plugin_results = plugin_installer.install(providers: ["opencode"], scope: "local")
 
-      expect(plugin_results).to satisfy { |arr| arr.any? { |r| r["status"] == "skipped" || r["status"] == "no_manager_found" || r["status"] == "installed" } }
+      expect(plugin_results).to(satisfy do |arr|
+        arr.any? do |r|
+          %w[skipped no_manager_found installed].include?(r["status"])
+        end
+      end)
     end
 
-    it "supports dry-run mode without writing files"  , :aggregate_failures do
+    it "supports dry-run mode without writing files", :aggregate_failures do
       installer = described_class.new(global_root: global_root, local_root: local_root, dry_run: true)
 
       results = installer.install(
@@ -201,7 +216,7 @@ RSpec.describe Agentf::Installer do
       end.to raise_error(ArgumentError, /Unknown provider/)
     end
 
-    it "maps all READ_ACTIONS to CLI commands in agent manifests"  , :aggregate_failures do
+    it "maps all READ_ACTIONS to CLI commands in agent manifests", :aggregate_failures do
       installer = described_class.new(global_root: global_root, local_root: local_root)
 
       installer.install(
@@ -219,7 +234,7 @@ RSpec.describe Agentf::Installer do
       expect(content).to include("Policy Summary:")
     end
 
-    it "includes read fallback for agents with no explicit reads"  , :aggregate_failures do
+    it "includes read fallback for agents with no explicit reads", :aggregate_failures do
       installer = described_class.new(global_root: global_root, local_root: local_root)
 
       installer.install(
@@ -238,56 +253,43 @@ RSpec.describe Agentf::Installer do
     end
 
     context "CLI fallback section for agents" do
-      it "includes CLI fallback section in all provider agent manifests", :aggregate_failures do
+      it "includes CLI fallback section in opencode agent manifests", :aggregate_failures do
         installer = described_class.new(global_root: global_root, local_root: local_root)
-        installer.install(providers: ["opencode", "copilot"], scope: "local", only_agents: ["planner"], only_commands: [])
+        installer.install(providers: ["opencode"], scope: "local", only_agents: ["planner"], only_commands: [])
 
         opencode_content = File.read(File.join(local_root, ".opencode/agents/agentf-planner.md"))
-        copilot_content = File.read(File.join(local_root, ".github/agents/planner.agent.md"))
 
         expect(opencode_content).to include("## CLI Fallback")
         expect(opencode_content).to include("If the `agentf` MCP server is unavailable")
-        expect(copilot_content).to include("## CLI Fallback")
-        expect(copilot_content).to include("If the `agentf` MCP server is unavailable")
       end
 
-      it "includes agent CLI invocation in copilot fallback section", :aggregate_failures do
+      it "does not write per-agent files for copilot provider", :aggregate_failures do
+        installer = described_class.new(global_root: global_root, local_root: local_root)
+        installer.install(providers: ["copilot"], scope: "local", only_agents: %w[planner qa_tester],
+                          only_commands: [])
+
+        expect(File).not_to exist(File.join(local_root, ".github/agents/planner.agent.md"))
+        expect(File).not_to exist(File.join(local_root, ".github/agents/qa_tester.agent.md"))
+      end
+
+      it "includes agent list in copilot AGENTS.md", :aggregate_failures do
         installer = described_class.new(global_root: global_root, local_root: local_root)
         installer.install(providers: ["copilot"], scope: "local", only_agents: ["planner"], only_commands: [])
 
-        content = File.read(File.join(local_root, ".github/agents/planner.agent.md"))
+        content = File.read(File.join(local_root, "AGENTS.md"))
 
-        expect(content).to include("`agentf agent planner \"<input>\"`")
+        expect(content).to include("agentf-planner")
       end
 
-      it "includes standard memory read CLI commands in copilot fallback", :aggregate_failures do
+      it "includes MCP tool guidance in copilot-instructions.md", :aggregate_failures do
         installer = described_class.new(global_root: global_root, local_root: local_root)
         installer.install(providers: ["copilot"], scope: "local", only_agents: ["planner"], only_commands: [])
 
-        content = File.read(File.join(local_root, ".github/agents/planner.agent.md"))
+        content = File.read(File.join(local_root, ".github/copilot-instructions.md"))
 
-        expect(content).to include("agentf memory recent -n 10")
-        expect(content).to include("agentf memory search")
-      end
-
-      it "includes memory write fallback CLI commands when agent writes to memory", :aggregate_failures do
-        installer = described_class.new(global_root: global_root, local_root: local_root)
-        installer.install(providers: ["copilot"], scope: "local", only_agents: ["qa_tester"], only_commands: [])
-
-        content = File.read(File.join(local_root, ".github/agents/qa_tester.agent.md"))
-
-        expect(content).to include("**Memory writes**:")
-        expect(content).to include("agentf memory add-episode")
-        expect(content).to include("--agent=QA_TESTER")
-      end
-
-      it "omits memory write section for agents with no memory writes", :aggregate_failures do
-        installer = described_class.new(global_root: global_root, local_root: local_root)
-        installer.install(providers: ["copilot"], scope: "local", only_agents: ["planner"], only_commands: [])
-
-        content = File.read(File.join(local_root, ".github/agents/planner.agent.md"))
-
-        expect(content).not_to include("**Memory writes**:")
+        expect(content).to include("agentf-memory-recent")
+        expect(content).to include("agentf-memory-search")
+        expect(content).to include("agentf-memory-add-lesson")
       end
 
       it "includes CLI fallback section in opencode agent manifests" do
@@ -301,50 +303,34 @@ RSpec.describe Agentf::Installer do
     end
 
     context "CLI fallback section for commands" do
-      it "includes CLI fallback section in all provider command manifests", :aggregate_failures do
+      it "includes CLI fallback section in opencode command manifests", :aggregate_failures do
         installer = described_class.new(global_root: global_root, local_root: local_root)
-        installer.install(providers: ["opencode", "copilot"], scope: "local", only_agents: [], only_commands: ["explorer"])
+        installer.install(providers: ["opencode"], scope: "local", only_agents: [], only_commands: ["explorer"])
 
         opencode_content = File.read(File.join(local_root, ".opencode/commands/agentf-explorer.md"))
-        copilot_content = File.read(File.join(local_root, ".github/commands/explorer.md"))
 
         expect(opencode_content).to include("## CLI Fallback")
         expect(opencode_content).to include("If the `agentf` MCP server is unavailable")
-        expect(copilot_content).to include("## CLI Fallback")
-        expect(copilot_content).to include("If the `agentf` MCP server is unavailable")
       end
 
-      it "includes explorer-specific code CLI commands", :aggregate_failures do
+      it "does not write per-command files for copilot provider", :aggregate_failures do
         installer = described_class.new(global_root: global_root, local_root: local_root)
-        installer.install(providers: ["copilot"], scope: "local", only_agents: [], only_commands: ["explorer"])
+        installer.install(providers: ["copilot"], scope: "local", only_agents: [],
+                          only_commands: %w[explorer memory debugger])
 
-        content = File.read(File.join(local_root, ".github/commands/explorer.md"))
-
-        expect(content).to include("agentf code glob")
-        expect(content).to include("agentf code grep")
-        expect(content).to include("agentf code tree")
-        expect(content).to include("agentf code related")
+        expect(File).not_to exist(File.join(local_root, ".github/commands/explorer.md"))
+        expect(File).not_to exist(File.join(local_root, ".github/commands/memory.md"))
+        expect(File).not_to exist(File.join(local_root, ".github/commands/debugger.md"))
       end
 
-      it "includes memory CLI commands for the memory command", :aggregate_failures do
+      it "includes copilot-instructions.md with memory tool guidance for copilot provider", :aggregate_failures do
         installer = described_class.new(global_root: global_root, local_root: local_root)
         installer.install(providers: ["copilot"], scope: "local", only_agents: [], only_commands: ["memory"])
 
-        content = File.read(File.join(local_root, ".github/commands/memory.md"))
+        content = File.read(File.join(local_root, ".github/copilot-instructions.md"))
 
-        expect(content).to include("agentf memory recent -n 10")
-        expect(content).to include("agentf memory search")
-        expect(content).to include("agentf memory add-lesson")
-      end
-
-      it "includes generic fallback for unspecialized commands", :aggregate_failures do
-        installer = described_class.new(global_root: global_root, local_root: local_root)
-        installer.install(providers: ["copilot"], scope: "local", only_agents: [], only_commands: ["debugger"])
-
-        content = File.read(File.join(local_root, ".github/commands/debugger.md"))
-
-        expect(content).to include("## CLI Fallback")
-        expect(content).to include("agentf memory recent -n 10")
+        expect(content).to include("agentf-memory-recent")
+        expect(content).to include("agentf-memory-search")
       end
     end
 
@@ -382,7 +368,8 @@ RSpec.describe Agentf::Installer do
 
       it "does not include TDD Requirement section for non-code-writing agents", :aggregate_failures do
         installer = described_class.new(global_root: global_root, local_root: local_root)
-        installer.install(providers: ["opencode"], scope: "local", only_agents: ["planner", "incident_responder"], only_commands: [])
+        installer.install(providers: ["opencode"], scope: "local", only_agents: %w[planner incident_responder],
+                          only_commands: [])
 
         planner_content = File.read(File.join(local_root, ".opencode/agents/agentf-planner.md"))
         debugger_content = File.read(File.join(local_root, ".opencode/agents/agentf-incident_responder.md"))
